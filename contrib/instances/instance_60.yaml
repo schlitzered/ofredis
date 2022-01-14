@@ -1,0 +1,38 @@
+# A demo custom resource for the Kopf example operators.
+apiVersion: kopf.dev/v1
+kind: RedisReplication
+metadata:
+  name: rrd-60
+  labels:
+    somelabel: somevalue
+  annotations:
+    someannotation: somevalue
+spec:
+  acls:
+    farts:
+      passwords:
+        - secretName: redis-replication-example
+          secretDataKey: password
+      commands:
+        - '+@all'
+      keyPatterns:
+        - '~farts*'
+      pubsubPatterns:
+        - '&fartss*'
+    admin:
+      commands:
+        - '+@all'
+      keyPatterns:
+        - '~*'
+      pubsubPatterns:
+        - '&*'
+      passwords:
+        - secretName: redis-replication-example
+          secretDataKey: admin_password
+      userEnable: on
+  config:
+    maxmemory: 128mb
+    save: ''
+  replicas: 3
+  redis:
+    image: redis

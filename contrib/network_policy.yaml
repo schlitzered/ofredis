@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-replication-example
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      RedisReplication: redis-replication-example
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+    - podSelector:
+        matchLabels:
+          application: redis-operator
+  - from:
+      - namespaceSelector:
+          matchLabels:
+            name: default
+      - podSelector:
+          matchLabels:
+            RedisReplication: redis-replication-example
+  - from:
+      - namespaceSelector:
+          matchLabels:
+            name: centos
+      - podSelector:
+          matchLabels:
+            run: centos
+    ports:
+    - protocol: TCP
+      port: 6379

@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      application: redis-operator
+  template:
+    metadata:
+      labels:
+        application: redis-operator
+    spec:
+      serviceAccountName: redis-operator-account
+      containers:
+      - name: redis-operator
+        image: schlitzered/redis-farts:latest
+
