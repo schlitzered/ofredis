@@ -2,7 +2,7 @@
 apiVersion: kopf.dev/v1
 kind: RedisReplication
 metadata:
-  name: redis-replication-example
+  name: rrk-blarg
   labels:
     somelabel: somevalue
   annotations:

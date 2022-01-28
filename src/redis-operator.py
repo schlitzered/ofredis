@@ -431,10 +431,10 @@ class RedisReplication:
         pykube.Pod(self.api, pod_data).create()
 
     def pod_delete(self, pod):
-        self.log.info("deleting pod {0}".format(pod.name))
+        self.log.info("{0} deleting pod".format(pod.name))
         pod.delete()
         self.redis.pop(pod.name, None)
-        self.log.info("deleting pod {0}, done".format(pod.name))
+        self.log.info("{0} deleting pod, done".format(pod.name))
 
     def pod_delete_candidate(self):
         candidates = []
@@ -474,24 +474,24 @@ class RedisReplication:
         ).get(name=pod_name)
 
     def pod_is_ready(self, pod):
-        self.log.info("checking if pod {0} is running".format(pod.name))
-        self.log.info("pod {0} in {1} phase".format(
+        self.log.info("{0} checking if pod is running".format(pod.name))
+        self.log.info("{0} pod in {1} phase".format(
             pod.name, pod.obj['status']['phase']
         ))
         if pod.obj['status']['phase'] == 'Running':
-            self.log.info("pod {0} is ready".format(pod.name))
+            self.log.info("{0} pod is ready".format(pod.name))
             return pod
         if pod.obj['status']['phase'] == 'Failed':
-            raise RedisReplicationPodError("pod in error state")
+            raise RedisReplicationPodError("{0} pod in error state".format(pod.name))
         if pod.obj['status']['phase'] == 'Succeeded':
-            raise RedisReplicationPodError("pod in succeeded state")
+            raise RedisReplicationPodError("{0} pod in succeeded state".format(pod.name))
         if pod.obj['status']['phase'] == 'Unknown':
-            raise RedisReplicationPodError("pod in unknown state")
-        raise RedisReplicationPodNotReady('pod {0} not ready.'.format(pod.name))
+            raise RedisReplicationPodError("{0} pod in unknown state".format(pod.name))
+        raise RedisReplicationPodNotReady('{0} pod not ready'.format(pod.name))
 
     def pod_set_label(self, pod, label_name, label_value, retry=3):
-        self.log.info("setting label {0} with value {1} on pod {2}".format(
-            label_name, label_value, pod.name
+        self.log.info("{0} setting label {1} with value {2} on pod".format(
+            pod.name, label_name, label_value
         ))
         while retry > 0:
             try:
@@ -499,22 +499,22 @@ class RedisReplication:
                 pod.update()
                 return
             except pykube.exceptions.HTTPError as err:
-                self.log.warning("could not update pod {0}: {1}, retrying".format(pod.name, err))
+                self.log.warning("{0} could not update pod: {1}, retrying".format(pod.name, err))
                 self.stopped.wait(1)
                 retry -= 1
                 pod = self.pod_get_by_name(pod_name=pod.name)
 
-        raise RedisReplicationRedisConnError("could not update pod {0}, no more retires left".format(pod.name))
+        raise RedisReplicationRedisConnError("{0} could not update pod, no more retires left".format(pod.name))
 
     def redis_client_connect(self, pod):
-        self.log.info("connecting to redis {0}".format(pod))
+        self.log.info("{0} connecting to redis".format(pod.name))
         self.pod_is_ready(pod=pod)
         ip_addr = pod.obj['status']['podIP']
         try:
             if 'RedisReplicationOperatorACLPresent' not in pod.labels:
                 self.redis_create_operator_acls(pod=pod, ip_addr=ip_addr)
 
-            self.log.info("trying to login with redis-operator credentials")
+            self.log.info("{0} trying to login with redis-operator credentials".format(pod.name))
             client = pyredis.Client(
                 host=ip_addr,
                 username=self.redis_auth_operator['OperatorUsername'],
@@ -522,7 +522,7 @@ class RedisReplication:
             )
             client.ping()
             self.redis[pod.name] = client
-            self.log.info("trying to login with redis-operator credentials, success")
+            self.log.info("{0} trying to login with redis-operator credentials, success".format(pod.name))
         except pyredis.exceptions.ReplyError as err:
             raise RedisReplicationRedisConnError(err)
         except (
@@ -531,9 +531,9 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnReadTimeout
         ) as err:
             self.log.debug(err)
-            self.log.error("connection to pod {0} went away".format(pod.name))
-            raise RedisReplicationRedisConnError("pod went away")
-        self.log.info("connecting to redis {0}, done".format(pod))
+            self.log.error("{0} connection to pod went away".format(pod.name))
+            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
+        self.log.info("{0} connecting to redis, done".format(pod.name))
 
     def redis_client_get(self, pod):
         if pod.name not in self.redis:
@@ -541,11 +541,11 @@ class RedisReplication:
         return self.redis[pod.name]
 
     def redis_create_operator_acls(self, pod, ip_addr):
-        self.log.info("trying to login without username/password")
+        self.log.info("{0} trying to login without username/password".format(pod.name))
         client = pyredis.Client(host=ip_addr)
         client.ping()
-        self.log.info("trying to login without username/password, success")
-        self.log.info("creating operator acl")
+        self.log.info("{0} trying to login without username/password, success".format(pod.name))
+        self.log.info("{0} creating operator acl".format(pod.name))
         self.redis_acl_enforce(
             pod=pod,
             username=self.redis_acl_operator.username,
@@ -553,8 +553,8 @@ class RedisReplication:
             spec_acl=self.redis_acl_operator,
             client=client
         )
-        self.log.info("creating operator acl, done")
-        self.log.info("creating replication acl")
+        self.log.info("{0} creating operator acl, done".format(pod.name))
+        self.log.info("{0} creating replication acl".format(pod.name))
         self.redis_acl_enforce(
             pod=pod,
             username=self.redis_acl_repl.username,
@@ -562,14 +562,14 @@ class RedisReplication:
             spec_acl=self.redis_acl_repl,
             client=client
         )
-        self.log.info("creating replication acl, done")
-        self.log.info("setting RedisReplicationOperatorACLPresent label")
+        self.log.info("{0} creating replication acl, done".format(pod.name))
+        self.log.info("{0} setting RedisReplicationOperatorACLPresent label".format(pod.name))
         self.pod_set_label(
             pod=pod,
             label_name='RedisReplicationOperatorACLPresent',
             label_value=True
         )
-        self.log.info("setting RedisReplicationOperatorACLPresent label, done")
+        self.log.info("{0} setting RedisReplicationOperatorACLPresent label, done".format(pod.name))
 
     def redis_config_enforce(self, pod):
         client = self.redis_client_get(pod)
@@ -583,15 +583,15 @@ class RedisReplication:
                     pyredis.exceptions.PyRedisConnError,
                     pyredis.exceptions.PyRedisConnReadTimeout
             ):
-                self.log.error("connection to pod {0} went away".format(pod.name))
+                self.log.error("{0} connection to pod went away".format(pod.name))
                 raise RedisReplicationRedisConnError("pod went away")
             target_value = self.redis_config_encode(value=target_value)
             if not current_value:
-                self.log.warning("option {0} not found in redis, ignoring".format(option))
+                self.log.warning("{0} option not found in redis, ignoring".format(option))
                 continue
             if current_value[1] != target_value:
-                self.log.info("option {0} current value {1} not matching {2}, adjusting".format(
-                    option, current_value, target_value
+                self.log.info("{0} option {1} current value {2} not matching {3}, adjusting".format(
+                    pod.name, option, current_value, target_value
                 ))
                 client.execute('CONFIG', 'SET', option, target_value)
 
@@ -625,8 +625,8 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
         ):
-            self.log.error("connection to pod {0} went away".format(pod.name))
-            raise RedisReplicationRedisConnError("pod went away")
+            self.log.error("{0} connection to pod went away".format(pod.name))
+            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
 
     @staticmethod
     def _redis_acl_add_password(command, passwords):
@@ -674,7 +674,7 @@ class RedisReplication:
             command.extend(list(spec_acl.pubsub_patterns))
 
         if changes:
-            self.log.info("ACL changes for pod: {0} acl: {1} detected, executing: {2}".format(
+            self.log.info("{0} ACL changes acl: {1} detected, executing: {2}".format(
                 pod.name, username, command
             ))
             try:
@@ -684,8 +684,8 @@ class RedisReplication:
                     pyredis.exceptions.PyRedisConnError,
                     pyredis.exceptions.PyRedisConnReadTimeout
             ) as err:
-                self.log.error("connection to pod {0} went away: {1}".format(pod.name, err))
-                raise RedisReplicationRedisConnError("pod went away")
+                self.log.error("{0} connection to pod went away: {1}".format(pod.name, err))
+                raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
         return changes
 
     def redis_acls_enforce(self, pod):
@@ -725,9 +725,9 @@ class RedisReplication:
                         spec_acl=default_user
                     )
                 else:
-                    self.log.info("deleting user {0}".format(username))
+                    self.log.info("{0} deleting user {1}".format(pod.name, username))
                     client.execute('ACL', 'DELUSER', username)
-                    self.log.info("deleting user {0}, done".format(username))
+                    self.log.info("{0} deleting user {1}, done".format(pod.name, username))
 
     def redis_acl_list(self, pod):
         client = self.redis_client_get(pod=pod)
@@ -738,8 +738,8 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
         ):
-            self.log.error("connection to pod {0} went away".format(pod.name))
-            raise RedisReplicationRedisConnError("pod went away")
+            self.log.error("{0} connection to pod went away".format(pod.name))
+            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
         acls = dict()
         for acl in _acls:
             acl = acl.decode()
@@ -772,6 +772,19 @@ class RedisReplication:
             elif item == 'nopass':
                 _acl.passwords.add(item)
 
+    def redis_cleanup(self):
+        redis_delete = list()
+        for redis in self.redis:
+            present = False
+            for pod in self.pods:
+                if pod.name == redis:
+                    present = True
+            if not present:
+                self.log.info("{0} removed from kubernetes, dropping connection".format(redis))
+                redis_delete.append(redis)
+        for redis in redis_delete:
+            self.redis.pop(redis)
+
     def redis_primary_enforce(self):
         primary = self.pod_primary
         if not primary:
@@ -783,7 +796,7 @@ class RedisReplication:
                 pass
             except RedisReplicationRedisConnError as err:
                 self.redis.pop(pod.name, None)
-                self.log.error("lost connection to redis on pod {0}: {1}".format(
+                self.log.error("{0} lost connection to redis on pod: {1}".format(
                     pod, err
                 ))
             except RedisReplicationPodError:
@@ -804,7 +817,7 @@ class RedisReplication:
         return primary
 
     def redis_replication_primary_promote(self, pod):
-        self.log.info('promoting pod {0} to primary'.format(pod))
+        self.log.info('{0} promoting pod to primary'.format(pod))
         client = self.redis_client_get(pod=pod)
         try:
             client.execute('replicaof', 'NO', 'ONE')
@@ -816,25 +829,25 @@ class RedisReplication:
                 label_name='RedisReplicationRole',
                 label_value='Primary'
             )
-            self.log.info('promoting pod {0} to primary, success'.format(pod))
+            self.log.info('{0} promoting pod to primary, success'.format(pod))
         except (
                 pyredis.exceptions.PyRedisConnClosed,
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
         ) as err:
-            self.log.error("connection to pod {0} went away".format(pod.name))
+            self.log.error("{0} connection to pod went away".format(pod.name))
             raise RedisReplicationRedisConnError(err)
 
     def redis_replication_secondary_enforce(self, pod):
         primary = self.pod_primary
         primary_name = self.pod_primary_name
         if not primary:
-            self.log.warning("no primary detected, skipping secondary enforcement")
+            self.log.warning("{0} no primary detected, skipping secondary enforcement".format(pod.name))
             return
         try:
             primary_ip = primary.obj['status']['podIP']
         except KeyError:
-            self.log.warning("could not get PodIP from primary pod {0}".format(primary_name))
+            self.log.warning("{0} could not get PodIP from primary pod {1}".format(pod.name, primary_name))
             return
         secrets = self.redis_auth_operator
         if pod.name == primary_name:
@@ -845,7 +858,7 @@ class RedisReplication:
             replof = replof.decode()
             if replof.startswith(primary_ip):
                 return
-            self.log.info("making pod {0} replica of pod {1}".format(
+            self.log.info("{0} making pod replica of pod {1}".format(
                 pod.name, primary_name
             ))
             client.execute('config', 'SET', 'masterauth', secrets['ReplPassword'])
@@ -856,7 +869,7 @@ class RedisReplication:
                 label_name='RedisReplicationRole',
                 label_value='Secondary'
             )
-            self.log.info("making pod {0} replica of pod {1}, success".format(
+            self.log.info("{0} making pod replica of pod {1}, success".format(
                 pod.name, primary_name
             ))
         except (
@@ -864,7 +877,7 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
         ):
-            self.log.error("connection to pod {0} went away".format(pod.name))
+            self.log.error("{0} connection to pod went away".format(pod.name))
             raise RedisReplicationRedisConnError
 
     def update_object_status(self):
@@ -886,6 +899,7 @@ class RedisReplication:
         while not self.stopped:
             self.pod_ensure_count()
             self.redis_primary_enforce()
+            self.redis_cleanup()
             for pod in self.pods:
                 try:
                     self.redis_acls_enforce(pod=pod)
@@ -897,7 +911,7 @@ class RedisReplication:
                     pass
                 except RedisReplicationRedisConnError as err:
                     self.redis.pop(pod.name, None)
-                    self.log.error("lost connection to redis on pod {0}: {1}".format(
+                    self.log.error("{0} lost connection to redis on pod: {1}".format(
                         pod, err
                     ))
             self.stopped.wait(1)
