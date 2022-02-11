@@ -15,6 +15,7 @@ logging.getLogger("urllib3").setLevel(logging.WARNING)
 sha256_regex = re.compile('^[A-Fa-f0-9]{64}$')
 redis_num_unit_convert = re.compile('^[0-9]*(k|kb|m|mb|g|fb)$')
 
+
 redis_config_params_filter = [
     'appendfilename',
     'dbfilename',
@@ -44,7 +45,7 @@ def redis_monitor_daemon(stopped, logger, spec, name, namespace, **__):
     redis_repl.run()
 
 
-class KEX(pykube.objects.NamespacedAPIObject):
+class PyKubeRedisReplication(pykube.objects.NamespacedAPIObject):
     version = 'kopf.dev/v1'
     endpoint = 'redis-replications'
     kind = 'RedisReplication'
@@ -161,6 +162,7 @@ class RedisReplication:
         self._redis = dict()
         self._redis_acl_operator = None
         self._redis_acl_repl = None
+        self._redis_operator_secrets = None
         self._spec = spec
         self._stopped = stopped
 
@@ -184,7 +186,7 @@ class RedisReplication:
 
     @property
     def operator_status(self):
-        return KEX.objects(
+        return PyKubeRedisReplication.objects(
             self.api,
             namespace=self.namespace
         ).get_by_name(self.name)
@@ -248,7 +250,7 @@ class RedisReplication:
     @property
     def redis_acl_operator(self):
         if not self._redis_acl_operator:
-            secrets = self.redis_auth_operator
+            secrets = self.redis_operator_secrets
             self._redis_acl_operator = RedisAcl(
                 logger=self.log,
                 username=secrets['OperatorUsername'],
@@ -263,7 +265,7 @@ class RedisReplication:
     @property
     def redis_acl_repl(self):
         if not self._redis_acl_repl:
-            secrets = self.redis_auth_operator
+            secrets = self.redis_operator_secrets
             self._redis_acl_repl = RedisAcl(
                 logger=self.log,
                 username=secrets['ReplUsername'],
@@ -275,52 +277,63 @@ class RedisReplication:
             )
         return self._redis_acl_repl
 
-    @property
-    def redis_auth_operator(self):
+    def _redis_operator_secrets_create(self):
+        secrets = {
+            "OperatorUsername": str(uuid.uuid4()),
+            "OperatorPassword": str(uuid.uuid4()),
+            "ReplUsername": str(uuid.uuid4()),
+            "ReplPassword": str(uuid.uuid4()),
+        }
+        secret_data = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": "{0}-operator".format(self.name)},
+            "type": "Opaque",
+            "data": {
+                "OperatorUsername": base64.b64encode(secrets["OperatorUsername"].encode()).decode(),
+                "OperatorPassword": base64.b64encode(secrets["OperatorPassword"].encode()).decode(),
+                "ReplUsername": base64.b64encode(secrets["ReplUsername"].encode()).decode(),
+                "ReplPassword": base64.b64encode(secrets["ReplPassword"].encode()).decode(),
+            }
+        }
+        kopf.adopt(secret_data)
+        kopf.label(secret_data, {'RedisReplication': self.name})
+        while True:
+            try:
+                self.log.info('Creating Secret {0}-operator'.format(self.name))
+                print(pykube.Secret(self.api, secret_data).create())
+                self.log.info('Creating Secret {0}-operator, done'.format(self.name))
+                return secrets
+            except pykube.exceptions.KubernetesError as err:
+                self.log.error('Creating Secret {0}-operator failed, {1}'.format(self.name, err))
+                self.log.error("retrying in 10 seconds")
+                self.stopped.wait(10)
+
+    def _redis_operator_secrets_get(self):
         try:
-            secret = pykube.Secret.objects(
+            secrets = pykube.Secret.objects(
                 self.api
             ).filter(
                 namespace=self.namespace
             ).get(
                 name="{0}-operator".format(self.name)
             )
-            result = secret.obj['data']
-            result = {
-                "OperatorUsername": base64.b64decode(result["OperatorUsername"].encode()).decode(),
-                "OperatorPassword": base64.b64decode(result["OperatorPassword"].encode()).decode(),
-                "ReplUsername": base64.b64decode(result["ReplUsername"].encode()).decode(),
-                "ReplPassword": base64.b64decode(result["ReplPassword"].encode()).decode(),
+            secrets = secrets.obj['data']
+            secrets = {
+                "OperatorUsername": base64.b64decode(secrets["OperatorUsername"].encode()).decode(),
+                "OperatorPassword": base64.b64decode(secrets["OperatorPassword"].encode()).decode(),
+                "ReplUsername": base64.b64decode(secrets["ReplUsername"].encode()).decode(),
+                "ReplPassword": base64.b64decode(secrets["ReplPassword"].encode()).decode(),
             }
         except pykube.exceptions.ObjectDoesNotExist:
-            self.log.info(
-                'Creating Secret {0}-operator'.format("{0}".format(self.name))
-            )
-            result = {
-                "OperatorUsername": str(uuid.uuid4()),
-                "OperatorPassword": str(uuid.uuid4()),
-                "ReplUsername": str(uuid.uuid4()),
-                "ReplPassword": str(uuid.uuid4()),
-            }
-            secret_data = {
-                "apiVersion": "v1",
-                "kind": "Secret",
-                "metadata": {"name": "{0}-operator".format(self.name)},
-                "type": "Opaque",
-                "data": {
-                    "OperatorUsername": base64.b64encode(result["OperatorUsername"].encode()).decode(),
-                    "OperatorPassword": base64.b64encode(result["OperatorPassword"].encode()).decode(),
-                    "ReplUsername": base64.b64encode(result["ReplUsername"].encode()).decode(),
-                    "ReplPassword": base64.b64encode(result["ReplPassword"].encode()).decode(),
-                }
-            }
-            kopf.adopt(secret_data)
-            kopf.label(secret_data, {'RedisReplication': self.name})
-            pykube.Secret(self.api, secret_data).create()
-            self.log.info(
-                'Creating Secret {0}-operator, done'.format("{0}".format(self.name))
-            )
-        return result
+            secrets = self._redis_operator_secrets_create()
+        return secrets
+
+    @property
+    def redis_operator_secrets(self):
+        if not self._redis_operator_secrets:
+            self._redis_operator_secrets = self._redis_operator_secrets_get()
+        return self._redis_operator_secrets
 
     @property
     def spec(self):
@@ -391,15 +404,14 @@ class RedisReplication:
             )
         except pykube.exceptions.ObjectDoesNotExist:
             self.log.error('Secret {0} not found'.format(
-                self.spec['password']['secretName']
+                secret_name
             ))
             raise RedisReplicationSecretMissing
         try:
             return base64.b64decode(secret.obj['data'][secret_data_key].encode()).decode()
         except KeyError:
             self.log.error('Secret {0} has no DataKey {1}'.format(
-                self.spec['password']['secretName'],
-                self.spec['password']['secretDataKey']
+                secret_name, secret_data_key
             ))
             raise RedisReplicationSecretMissing
 
@@ -436,7 +448,7 @@ class RedisReplication:
         self.redis.pop(pod.name, None)
         self.log.info("{0} deleting pod, done".format(pod.name))
 
-    def pod_delete_candidate(self):
+    def pod_delete_candidates(self):
         candidates = []
         self.log.info("trying to find unconfigured pod")
         for pod in self.pods:
@@ -450,20 +462,25 @@ class RedisReplication:
         return self.pod_secondaries
 
     def pod_ensure_count(self):
-        while len(self.pods) < self.spec['replicas']:
+        num_pods = len(self.pods)
+        while num_pods < self.spec['replicas']:
             self.log.info("we have {0} of {1} replicas".format(
-                len(self.pods),
+                num_pods,
                 self.spec['replicas']
             ))
             self.pod_create()
             self.update_object_status()
-        while len(self.pods) > self.spec['replicas']:
+            num_pods += 1
+        while num_pods > self.spec['replicas']:
             self.log.info("we have {0} of {1} replicas".format(
-                len(self.pods),
+                num_pods,
                 self.spec['replicas']
             ))
-            self.pod_delete(pod=self.pod_delete_candidate().pop())
+            candidate = self.pod_delete_candidates().pop()
+            print(candidate)
+            self.pod_delete(pod=candidate)
             self.update_object_status()
+            num_pods -= 1
 
     def pod_get_by_name(self, pod_name):
         return pykube.Pod.objects(
@@ -481,13 +498,16 @@ class RedisReplication:
         if pod.obj['status']['phase'] == 'Running':
             self.log.info("{0} pod is ready".format(pod.name))
             return pod
-        if pod.obj['status']['phase'] == 'Failed':
+        elif pod.obj['status']['phase'] == 'Pending':
+            raise RedisReplicationPodNotReady('{0} pod not ready'.format(pod.name))
+        elif pod.obj['status']['phase'] == 'Failed':
             raise RedisReplicationPodError("{0} pod in error state".format(pod.name))
-        if pod.obj['status']['phase'] == 'Succeeded':
+        elif pod.obj['status']['phase'] == 'Succeeded':
             raise RedisReplicationPodError("{0} pod in succeeded state".format(pod.name))
-        if pod.obj['status']['phase'] == 'Unknown':
+        elif pod.obj['status']['phase'] == 'Unknown':
             raise RedisReplicationPodError("{0} pod in unknown state".format(pod.name))
-        raise RedisReplicationPodNotReady('{0} pod not ready'.format(pod.name))
+        else:
+            raise RedisReplicationPodError("{0} pod in and unsupported state".format(pod.name))
 
     def pod_set_label(self, pod, label_name, label_value, retry=3):
         self.log.info("{0} setting label {1} with value {2} on pod".format(
@@ -517,8 +537,8 @@ class RedisReplication:
             self.log.info("{0} trying to login with redis-operator credentials".format(pod.name))
             client = pyredis.Client(
                 host=ip_addr,
-                username=self.redis_auth_operator['OperatorUsername'],
-                password=self.redis_auth_operator['OperatorPassword']
+                username=self.redis_operator_secrets['OperatorUsername'],
+                password=self.redis_operator_secrets['OperatorPassword']
             )
             client.ping()
             self.redis[pod.name] = client
@@ -611,22 +631,6 @@ class RedisReplication:
             elif value.endswith('gb'):
                 value = str(int(value[:-2])*1024*1024*1024)
         return value.encode()
-
-    def redis_acl(self, pod):
-        client = self.redis_client_get(pod=pod)
-
-        try:
-            for item in client.execute('INFO', 'REPLICATION').decode().split('\r\n'):
-                if item.startswith('role:'):
-                    role = item.split(':')[1]
-                    self.log.info("{0} role is {1}".format(pod.name, role))
-        except (
-                pyredis.exceptions.PyRedisConnClosed,
-                pyredis.exceptions.PyRedisConnError,
-                pyredis.exceptions.PyRedisConnReadTimeout
-        ):
-            self.log.error("{0} connection to pod went away".format(pod.name))
-            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
 
     @staticmethod
     def _redis_acl_add_password(command, passwords):
@@ -849,7 +853,7 @@ class RedisReplication:
         except KeyError:
             self.log.warning("{0} could not get PodIP from primary pod {1}".format(pod.name, primary_name))
             return
-        secrets = self.redis_auth_operator
+        secrets = self.redis_operator_secrets
         if pod.name == primary_name:
             return
         try:
@@ -940,3 +944,4 @@ class RedisReplicationPodNotReady(RedisReplicationError):
 
 class RedisReplicationSecretMissing(RedisReplicationError):
     pass
+

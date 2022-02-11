@@ -1,2 +1,5 @@
+.coverage
 .idea
 __pycache__/
+dist/
+ofredis.egg-info/

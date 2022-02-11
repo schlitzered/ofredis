@@ -1,4 +1,7 @@
 FROM python:3.9
 RUN pip install kopf python-dateutil python_redis==0.3.0rc1 pykube-ng
-COPY src/redis-operator.py /redis-operator.py
-CMD kopf run /redis-operator.py --verbose -A
+#COPY src/redis-test_operator.py /redis-test_operator.py
+COPY dist/ofredis-0.0.0.tar.gz /ofredis.tar.gz
+RUN pip install /ofredis.tar.gz
+#CMD kopf run /redis-test_operator.py --verbose -A
+CMD kopf run -m ofredis --verbose -A

@@ -1,4 +1,3 @@
-# A demo custom resource for the Kopf example operators.
 apiVersion: kopf.dev/v1
 kind: RedisReplication
 metadata:
@@ -9,26 +8,16 @@ metadata:
     someannotation: somevalue
 spec:
   acls:
-    fartss:
+    dummy1:
       passwords:
         - secretName: redis-replication-example
-          secretDataKey: password
-      commands:
-        - '+@all'
-      keyPatterns:
-        - '~farts*'
-      pubsubPatterns:
-        - '&fartss*'
-    admin:
+          secretDataKey: dummy1
       commands:
         - '+@all'
       keyPatterns:
         - '~*'
       pubsubPatterns:
         - '&*'
-      passwords:
-        - secretName: redis-replication-example
-          secretDataKey: admin_password
       userEnable: on
   config:
     maxmemory: 128mb
