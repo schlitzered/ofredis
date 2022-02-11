@@ -29,7 +29,7 @@ redis_config_params_filter = [
 
 
 @kopf.on.startup()
-async def configure(settings: kopf.OperatorSettings, **kwargs):
+async def configure(settings: kopf.OperatorSettings, **_):
     settings.execution.max_workers = 10000
 
 
@@ -159,7 +159,7 @@ class RedisReplication:
         self._log = logger
         self._name = name
         self._namespace = namespace
-        self._redis = dict()
+        self._redis = {}
         self._redis_acl_operator = None
         self._redis_acl_repl = None
         self._redis_operator_secrets = None
@@ -216,6 +216,7 @@ class RedisReplication:
         pod = self.pod_primary
         if pod:
             return pod.name
+        return None
 
     @property
     def pod_primaries(self):
@@ -301,7 +302,6 @@ class RedisReplication:
         while True:
             try:
                 self.log.info('Creating Secret {0}-operator'.format(self.name))
-                print(pykube.Secret(self.api, secret_data).create())
                 self.log.info('Creating Secret {0}-operator, done'.format(self.name))
                 return secrets
             except pykube.exceptions.KubernetesError as err:
@@ -341,7 +341,7 @@ class RedisReplication:
 
     @property
     def spec_acls(self):
-        acls = dict()
+        acls = {}
         for username, acl_spec in self.spec['acls'].items():
             if username in ['RedisOperator', 'RedisRepl']:
                 self.log.warning('removing reserved username {0} from acl spec'.format(username))
@@ -354,8 +354,8 @@ class RedisReplication:
             commands = acl_spec.get('commands', None)
             key_patterns = acl_spec.get('keyPatterns', None)
             pubsub_patterns = acl_spec.get('pubsubPatterns', None)
-            passwords = list()
-            for secret_spec in acl_spec.get('passwords', dict()):
+            passwords = []
+            for secret_spec in acl_spec.get('passwords', {}):
                 password = self.password(
                     secret_name=secret_spec['secretName'],
                     secret_data_key=secret_spec['secretDataKey']
@@ -387,7 +387,7 @@ class RedisReplication:
 
     @staticmethod
     def _pod_remove_deleted(pods):
-        result = list()
+        result = []
         for pod in pods:
             if 'deletionTimestamp' not in pod.metadata:
                 result.append(pod)
@@ -402,18 +402,18 @@ class RedisReplication:
             ).get(
                 name=secret_name
             )
-        except pykube.exceptions.ObjectDoesNotExist:
+        except pykube.exceptions.ObjectDoesNotExist as err:
             self.log.error('Secret {0} not found'.format(
                 secret_name
             ))
-            raise RedisReplicationSecretMissing
+            raise RedisReplicationSecretMissing from err
         try:
             return base64.b64decode(secret.obj['data'][secret_data_key].encode()).decode()
-        except KeyError:
+        except KeyError as err:
             self.log.error('Secret {0} has no DataKey {1}'.format(
                 secret_name, secret_data_key
             ))
-            raise RedisReplicationSecretMissing
+            raise RedisReplicationSecretMissing from err
 
     def pod_create(self):
         pod_data = {
@@ -477,7 +477,6 @@ class RedisReplication:
                 self.spec['replicas']
             ))
             candidate = self.pod_delete_candidates().pop()
-            print(candidate)
             self.pod_delete(pod=candidate)
             self.update_object_status()
             num_pods -= 1
@@ -498,16 +497,15 @@ class RedisReplication:
         if pod.obj['status']['phase'] == 'Running':
             self.log.info("{0} pod is ready".format(pod.name))
             return pod
-        elif pod.obj['status']['phase'] == 'Pending':
+        if pod.obj['status']['phase'] == 'Pending':
             raise RedisReplicationPodNotReady('{0} pod not ready'.format(pod.name))
-        elif pod.obj['status']['phase'] == 'Failed':
+        if pod.obj['status']['phase'] == 'Failed':
             raise RedisReplicationPodError("{0} pod in error state".format(pod.name))
-        elif pod.obj['status']['phase'] == 'Succeeded':
+        if pod.obj['status']['phase'] == 'Succeeded':
             raise RedisReplicationPodError("{0} pod in succeeded state".format(pod.name))
-        elif pod.obj['status']['phase'] == 'Unknown':
+        if pod.obj['status']['phase'] == 'Unknown':
             raise RedisReplicationPodError("{0} pod in unknown state".format(pod.name))
-        else:
-            raise RedisReplicationPodError("{0} pod in and unsupported state".format(pod.name))
+        raise RedisReplicationPodError("{0} pod in and unsupported state".format(pod.name))
 
     def pod_set_label(self, pod, label_name, label_value, retry=3):
         self.log.info("{0} setting label {1} with value {2} on pod".format(
@@ -544,7 +542,7 @@ class RedisReplication:
             self.redis[pod.name] = client
             self.log.info("{0} trying to login with redis-operator credentials, success".format(pod.name))
         except pyredis.exceptions.ReplyError as err:
-            raise RedisReplicationRedisConnError(err)
+            raise RedisReplicationRedisConnError(err) from err
         except (
                 pyredis.exceptions.PyRedisConnClosed,
                 pyredis.exceptions.PyRedisConnError,
@@ -552,7 +550,7 @@ class RedisReplication:
         ) as err:
             self.log.debug(err)
             self.log.error("{0} connection to pod went away".format(pod.name))
-            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
+            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name)) from err
         self.log.info("{0} connecting to redis, done".format(pod.name))
 
     def redis_client_get(self, pod):
@@ -602,9 +600,9 @@ class RedisReplication:
                     pyredis.exceptions.PyRedisConnClosed,
                     pyredis.exceptions.PyRedisConnError,
                     pyredis.exceptions.PyRedisConnReadTimeout
-            ):
+            ) as err:
                 self.log.error("{0} connection to pod went away".format(pod.name))
-                raise RedisReplicationRedisConnError("pod went away")
+                raise RedisReplicationRedisConnError("pod went away") from err
             target_value = self.redis_config_encode(value=target_value)
             if not current_value:
                 self.log.warning("{0} option not found in redis, ignoring".format(option))
@@ -689,7 +687,7 @@ class RedisReplication:
                     pyredis.exceptions.PyRedisConnReadTimeout
             ) as err:
                 self.log.error("{0} connection to pod went away: {1}".format(pod.name, err))
-                raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
+                raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name)) from err
         return changes
 
     def redis_acls_enforce(self, pod):
@@ -741,10 +739,10 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnClosed,
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
-        ):
+        ) as err:
             self.log.error("{0} connection to pod went away".format(pod.name))
-            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name))
-        acls = dict()
+            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name)) from err
+        acls = {}
         for acl in _acls:
             acl = acl.decode()
             self.redis_acl_parse(acl=acl, acls=acls)
@@ -777,7 +775,7 @@ class RedisReplication:
                 _acl.passwords.add(item)
 
     def redis_cleanup(self):
-        redis_delete = list()
+        redis_delete = []
         for redis in self.redis:
             present = False
             for pod in self.pods:
@@ -840,7 +838,7 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnReadTimeout
         ) as err:
             self.log.error("{0} connection to pod went away".format(pod.name))
-            raise RedisReplicationRedisConnError(err)
+            raise RedisReplicationRedisConnError(err) from err
 
     def redis_replication_secondary_enforce(self, pod):
         primary = self.pod_primary
@@ -880,9 +878,9 @@ class RedisReplication:
                 pyredis.exceptions.PyRedisConnClosed,
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
-        ):
+        ) as err:
             self.log.error("{0} connection to pod went away".format(pod.name))
-            raise RedisReplicationRedisConnError
+            raise RedisReplicationRedisConnError from err
 
     def update_object_status(self):
         self.operator_status.patch(
@@ -944,4 +942,3 @@ class RedisReplicationPodNotReady(RedisReplicationError):
 
 class RedisReplicationSecretMissing(RedisReplicationError):
     pass
-
