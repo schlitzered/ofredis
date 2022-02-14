@@ -1303,3 +1303,166 @@ class TestRedisReplicationUnit(TestCase):
         self.operator.redis_client_connect = redis_client_connect
         self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
 
+    def test_redis_config_enforce_unit_convert(self):
+        with open('{0}/test_redis_config_enforce_unit_convert.yaml'.format(self.data_path), 'r') as spec_yaml:
+            spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
+        self.operator._spec = spec['spec']
+
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+
+        redis_client_mock = Mock()
+        redis_client_mock.execute.side_effect = [
+            [b'maxmemory', b'0'],
+            b'OK',
+            [b'maxmemory', b'0'],
+            b'OK',
+            [b'maxmemory', b'0'],
+            b'OK',
+            [b'maxmemory', b'0'],
+            b'OK',
+            [b'maxmemory', b'0'],
+            b'OK',
+            [b'maxmemory', b'0'],
+            b'OK',
+        ]
+
+        self.operator.redis['pod1'] = redis_client_mock
+
+        self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
+
+        self.operator.redis_config_enforce(pod=pod1)
+
+        redis_client_mock.execute.assert_has_calls([
+            call('CONFIG', 'GET', 'maxmemory_1'),
+            call('CONFIG', 'SET', 'maxmemory_1', b'128000'),
+            call('CONFIG', 'GET', 'maxmemory_2'),
+            call('CONFIG', 'SET', 'maxmemory_2', b'131072'),
+            call('CONFIG', 'GET', 'maxmemory_3'),
+            call('CONFIG', 'SET', 'maxmemory_3', b'128000000'),
+            call('CONFIG', 'GET', 'maxmemory_4'),
+            call('CONFIG', 'SET', 'maxmemory_4', b'134217728'),
+            call('CONFIG', 'GET', 'maxmemory_5'),
+            call('CONFIG', 'SET', 'maxmemory_5', b'128000000000'),
+            call('CONFIG', 'GET', 'maxmemory_6'),
+            call('CONFIG', 'SET', 'maxmemory_6', b'137438953472'),
+        ])
+
+    def test_redis_config_enforce_filter_config_options(self):
+        with open('{0}/test_redis_config_enforce_filter_config_options.yaml'.format(self.data_path), 'r') as spec_yaml:
+            spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
+        self.operator._spec = spec['spec']
+
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis['pod1'] = redis_client_mock
+
+        self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
+
+        self.operator.redis_config_enforce(pod=pod1)
+
+        self.assertFalse(redis_client_mock.execute.called)
+
+    def test_redis_config_enforce_unknown_option(self):
+        with open('{0}/test_redis_config_enforce_unknown_option.yaml'.format(self.data_path), 'r') as spec_yaml:
+            spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
+        self.operator._spec = spec['spec']
+
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+
+        redis_client_mock = Mock()
+        redis_client_mock.execute.return_value = []
+
+        self.operator.redis['pod1'] = redis_client_mock
+
+        self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
+
+        self.operator.redis_config_enforce(pod=pod1)
+
+    def test_redis_config_enforce_redis_exception(self):
+        with open('{0}/test_redis_config_enforce_unknown_option.yaml'.format(self.data_path), 'r') as spec_yaml:
+            spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
+        self.operator._spec = spec['spec']
+
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+
+        redis_client_mock = Mock()
+        redis_client_mock.execute.side_effect = [
+            pyredis.exceptions.PyRedisConnClosed()
+        ]
+
+        self.operator.redis['pod1'] = redis_client_mock
+
+        self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
+
+        self.assertRaises(
+            ofredis.RedisReplicationRedisConnError,
+            self.operator.redis_config_enforce,
+            pod=pod1
+        )
+

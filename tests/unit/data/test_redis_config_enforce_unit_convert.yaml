@@ -1,0 +1,31 @@
+apiVersion: kopf.dev/v1
+kind: RedisReplication
+metadata:
+  name: rrk-blarg
+  labels:
+    somelabel: somevalue
+  annotations:
+    someannotation: somevalue
+spec:
+  acls:
+    dummy1:
+      passwords:
+        - secretName: redis-replication-example
+          secretDataKey: dummy1
+      commands:
+        - '+@all'
+      keyPatterns:
+        - '~*'
+      pubsubPatterns:
+        - '&*'
+      userEnable: on
+  config:
+    maxmemory_1: 128k
+    maxmemory_2: 128kb
+    maxmemory_3: 128m
+    maxmemory_4: 128mb
+    maxmemory_5: 128g
+    maxmemory_6: 128gb
+  replicas: 3
+  redis:
+    image: redis

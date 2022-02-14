@@ -13,7 +13,7 @@ import pyredis.exceptions
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 sha256_regex = re.compile('^[A-Fa-f0-9]{64}$')
-redis_num_unit_convert = re.compile('^[0-9]*(k|kb|m|mb|g|fb)$')
+redis_num_unit_convert = re.compile('^[0-9]*(k|kb|m|mb|g|gb)$')
 
 
 redis_config_params_filter = [
