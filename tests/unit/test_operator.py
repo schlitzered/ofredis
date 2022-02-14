@@ -1270,9 +1270,11 @@ class TestRedisReplicationUnit(TestCase):
             }
         )
 
-        self.operator.redis['pod1'] = pod1
+        redis_client_mock = Mock()
 
-        self.assertEqual(pod1, self.operator.redis_client_get(pod=pod1))
+        self.operator.redis['pod1'] = redis_client_mock
+
+        self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
 
     def test_redis_client_get_create(self):
         pod1 = pykube.Pod(
@@ -1293,9 +1295,11 @@ class TestRedisReplicationUnit(TestCase):
             }
         )
 
+        redis_client_mock = Mock()
+
         def redis_client_connect(pod):
-            self.operator.redis['pod1'] = pod1
+            self.operator.redis[pod.name] = redis_client_mock
 
         self.operator.redis_client_connect = redis_client_connect
-        self.assertEqual(pod1, self.operator.redis_client_get(pod=pod1))
+        self.assertEqual(redis_client_mock, self.operator.redis_client_get(pod=pod1))
 

@@ -602,7 +602,7 @@ class RedisReplication:
             ) as err:
                 self.log.error("{0} connection to pod went away".format(pod.name))
                 raise RedisReplicationRedisConnError("pod went away") from err
-            target_value = self.redis_config_encode(value=target_value)
+            target_value = self._redis_config_encode(value=target_value)
             if not current_value:
                 self.log.warning("{0} option not found in redis, ignoring".format(option))
                 continue
@@ -613,7 +613,7 @@ class RedisReplication:
                 client.execute('CONFIG', 'SET', option, target_value)
 
     @staticmethod
-    def redis_config_encode(value):
+    def _redis_config_encode(value):
         if redis_num_unit_convert.match(value):
             if value.endswith('k'):
                 value = str(int(value[:-1])*1000)
