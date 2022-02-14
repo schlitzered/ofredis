@@ -31,7 +31,7 @@ spec:
           secretDataKey: admin_password
       userEnable: on
   config:
-    maxmemory: 128mb
+    maxmemory: 512mb
     save: ''
   replicas: 3
   redis:

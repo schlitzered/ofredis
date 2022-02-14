@@ -530,7 +530,7 @@ class RedisReplication:
         ip_addr = pod.obj['status']['podIP']
         try:
             if 'RedisReplicationOperatorACLPresent' not in pod.labels:
-                self.redis_create_operator_acls(pod=pod, ip_addr=ip_addr)
+                self._redis_create_operator_acls(pod=pod, ip_addr=ip_addr)
 
             self.log.info("{0} trying to login with redis-operator credentials".format(pod.name))
             client = pyredis.Client(
@@ -541,9 +541,8 @@ class RedisReplication:
             client.ping()
             self.redis[pod.name] = client
             self.log.info("{0} trying to login with redis-operator credentials, success".format(pod.name))
-        except pyredis.exceptions.ReplyError as err:
-            raise RedisReplicationRedisConnError(err) from err
         except (
+                pyredis.exceptions.ReplyError,
                 pyredis.exceptions.PyRedisConnClosed,
                 pyredis.exceptions.PyRedisConnError,
                 pyredis.exceptions.PyRedisConnReadTimeout
@@ -558,7 +557,7 @@ class RedisReplication:
             self.redis_client_connect(pod=pod)
         return self.redis[pod.name]
 
-    def redis_create_operator_acls(self, pod, ip_addr):
+    def _redis_create_operator_acls(self, pod, ip_addr):
         self.log.info("{0} trying to login without username/password".format(pod.name))
         client = pyredis.Client(host=ip_addr)
         client.ping()

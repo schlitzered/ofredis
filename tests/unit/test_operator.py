@@ -5,8 +5,8 @@ from unittest import TestCase
 from unittest.mock import Mock, MagicMock, PropertyMock, call, patch
 import uuid
 
-import kopf
 import pykube
+import pyredis.exceptions
 import yaml
 
 import ofredis
@@ -43,6 +43,7 @@ class TestRedisReplicationUnit(TestCase):
 
         pyredis_patcher = patch('ofredis.pyredis', autospec=True)
         self.mock_pyredis = pyredis_patcher.start()
+        self.mock_pyredis.exceptions = pyredis.exceptions
 
         self.mock_pykube_secret_objects = Mock()
         self.mock_pykube.Secret.objects.return_value = self.mock_pykube_secret_objects
@@ -1063,7 +1064,7 @@ class TestRedisReplicationUnit(TestCase):
 
         self.assertEqual(pod1.labels['dummy_label'], 'dummy_value')
 
-    def test_pod_set_label_retry(self):
+    def test_pod_set_label_retry_exceeded(self):
         pod1 = pykube.Pod(
             api=self.mock_pykube_instance,
             obj={
@@ -1097,4 +1098,204 @@ class TestRedisReplicationUnit(TestCase):
             label_value='dummy_value'
 
         )
+
+    def test_redis_client_connect(self):
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+        self.operator._redis_operator_secrets = {
+            'OperatorUsername': 'operator_user',
+            'OperatorPassword': 'operator_password'
+        }
+
+        client_mock = Mock()
+        self.mock_pyredis.Client.return_value = client_mock
+        self.operator.redis_client_connect(pod=pod1)
+
+        self.mock_pyredis.Client.assert_called_with(
+            host='10.0.0.1',
+            username='operator_user',
+            password='operator_password'
+        )
+        self.assertTrue(client_mock.ping.called)
+
+        self.assertEqual(client_mock, self.operator.redis['pod1'])
+
+    def test_redis_client_connect_create_operator_acls(self):
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+        self.operator._redis_operator_secrets = {
+            'OperatorUsername': 'operator_user',
+            'OperatorPassword': 'operator_password',
+            'ReplUsername': 'repl_user',
+            'ReplPassword': 'repl_password'
+        }
+
+        client_mock_no_acl = Mock()
+        client_mock_has_acl = Mock()
+        self.mock_pyredis.Client.side_effect = [
+            client_mock_no_acl,
+            client_mock_has_acl
+        ]
+
+        redis_acl_enforce_mock = Mock()
+        self.operator.redis_acl_enforce = redis_acl_enforce_mock
+
+        pod_set_label_mock = Mock()
+        self.operator.pod_set_label = pod_set_label_mock
+
+        self.operator.redis_client_connect(pod=pod1)
+
+        self.mock_pyredis.Client.assert_has_calls([
+            call(
+                host='10.0.0.1',
+            ),
+            call(
+                host='10.0.0.1',
+                username='operator_user',
+                password='operator_password'
+            )
+        ])
+        self.assertTrue(client_mock_no_acl.ping.called)
+
+        redis_acl_enforce_mock.assert_has_calls([
+            call(
+                pod=pod1,
+                username='operator_user',
+                redis_acl=None,
+                spec_acl=self.operator.redis_acl_operator,
+                client=client_mock_no_acl
+            ),
+            call(
+                pod=pod1,
+                username='repl_user',
+                redis_acl=None,
+                spec_acl=self.operator.redis_acl_repl,
+                client=client_mock_no_acl
+            ),
+        ])
+
+        pod_set_label_mock.assert_called_with(
+            pod=pod1,
+            label_name='RedisReplicationOperatorACLPresent',
+            label_value=True
+        )
+
+        self.assertTrue(client_mock_has_acl.ping.called)
+        self.assertEqual(client_mock_has_acl, self.operator.redis['pod1'])
+
+    def test_redis_client_connect_redis_reply_error(self):
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+        self.operator._redis_operator_secrets = {
+            'OperatorUsername': 'operator_user',
+            'OperatorPassword': 'operator_password'
+        }
+
+        client_mock = Mock()
+        client_mock.ping.side_effect = pyredis.exceptions.ReplyError()
+        self.mock_pyredis.Client.return_value = client_mock
+        self.assertRaises(
+            ofredis.RedisReplicationRedisConnError,
+            self.operator.redis_client_connect,
+            pod=pod1
+        )
+
+        self.mock_pyredis.Client.assert_called_with(
+            host='10.0.0.1',
+            username='operator_user',
+            password='operator_password'
+        )
+        self.assertTrue(client_mock.ping.called)
+
+    def test_redis_client_get(self):
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+
+        self.operator.redis['pod1'] = pod1
+
+        self.assertEqual(pod1, self.operator.redis_client_get(pod=pod1))
+
+    def test_redis_client_get_create(self):
+        pod1 = pykube.Pod(
+            api=self.mock_pykube_instance,
+            obj={
+                'metadata': {
+                    'name': 'pod1',
+                    'namespace': 'default',
+                    'labels': {
+                        'RedisReplicationRole': 'Secondary',
+                        'RedisReplicationOperatorACLPresent': True
+                    }
+                },
+                'status': {
+                    'podIP': '10.0.0.1',
+                    'phase': 'Running'
+                }
+            }
+        )
+
+        def redis_client_connect(pod):
+            self.operator.redis['pod1'] = pod1
+
+        self.operator.redis_client_connect = redis_client_connect
+        self.assertEqual(pod1, self.operator.redis_client_get(pod=pod1))
 
