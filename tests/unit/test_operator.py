@@ -252,7 +252,11 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         mock_filter_get = Mock()
         mock_filter_get.get.side_effect = pykube.exceptions.ObjectDoesNotExist()
         self.mock_pykube_secret_objects.filter.return_value = mock_filter_get
+        secret_create_mock = Mock()
+        self.mock_pykube.Secret.return_value = secret_create_mock
+
         secrets = self.operator.redis.operator_secrets
+
         self.assertIn('OperatorPassword', secrets)
         self.assertIn('OperatorUsername', secrets)
         self.assertIn('ReplPassword', secrets)
@@ -262,18 +266,39 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         self.assertIsInstance(secrets['ReplPassword'], str)
         self.assertIsInstance(secrets['ReplUsername'], str)
 
+        secret_data = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": "{0}-operator".format(self.operator.redis.name)},
+            "type": "Opaque",
+            "data": {
+                "OperatorUsername": base64.b64encode(secrets["OperatorUsername"].encode()).decode(),
+                "OperatorPassword": base64.b64encode(secrets["OperatorPassword"].encode()).decode(),
+                "ReplUsername": base64.b64encode(secrets["ReplUsername"].encode()).decode(),
+                "ReplPassword": base64.b64encode(secrets["ReplPassword"].encode()).decode(),
+            }
+        }
+
+        self.mock_pykube.Secret.assert_called_with(
+            self.operator.redis.api,
+            secret_data
+
+        )
+
     def test_property_redis_operator_secrets_retry(self):
         mock_filter_get = Mock()
         mock_filter_get.get.side_effect = pykube.exceptions.ObjectDoesNotExist()
         self.mock_pykube_secret_objects.filter.return_value = mock_filter_get
-        mock_create = Mock()
-        mock_create.create.side_effect = [
+        secret_create_mock = Mock()
+        secret_create_mock.create.side_effect = [
             pykube.exceptions.KubernetesError(),
             True
         ]
-        self.mock_pykube.Secret.return_value = mock_create
-        self.assertIsInstance(self.operator.redis.operator_secrets, dict)
+        self.mock_pykube.Secret.return_value = secret_create_mock
         secrets = self.operator.redis.operator_secrets
+
+        self.assertIsInstance(secrets, dict)
+
         self.assertIn('OperatorPassword', secrets)
         self.assertIn('OperatorUsername', secrets)
         self.assertIn('ReplPassword', secrets)
@@ -282,6 +307,37 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         self.assertIsInstance(secrets['OperatorUsername'], str)
         self.assertIsInstance(secrets['ReplPassword'], str)
         self.assertIsInstance(secrets['ReplUsername'], str)
+        secret_data = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": "{0}-operator".format(self.operator.redis.name)},
+            "type": "Opaque",
+            "data": {
+                "OperatorUsername": base64.b64encode(secrets["OperatorUsername"].encode()).decode(),
+                "OperatorPassword": base64.b64encode(secrets["OperatorPassword"].encode()).decode(),
+                "ReplUsername": base64.b64encode(secrets["ReplUsername"].encode()).decode(),
+                "ReplPassword": base64.b64encode(secrets["ReplPassword"].encode()).decode(),
+            }
+        }
+
+        secret_data = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {"name": "{0}-operator".format(self.operator.redis.name)},
+            "type": "Opaque",
+            "data": {
+                "OperatorUsername": base64.b64encode(secrets["OperatorUsername"].encode()).decode(),
+                "OperatorPassword": base64.b64encode(secrets["OperatorPassword"].encode()).decode(),
+                "ReplUsername": base64.b64encode(secrets["ReplUsername"].encode()).decode(),
+                "ReplPassword": base64.b64encode(secrets["ReplPassword"].encode()).decode(),
+            }
+        }
+
+        self.mock_pykube.Secret.assert_called_with(
+            self.operator.redis.api,
+            secret_data
+
+        )
 
     def test_property_redis_connections(self):
         self.assertIsInstance(self.operator.redis.connections, dict)
