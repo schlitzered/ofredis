@@ -267,12 +267,21 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         mock_filter_get.get.side_effect = pykube.exceptions.ObjectDoesNotExist()
         self.mock_pykube_secret_objects.filter.return_value = mock_filter_get
         mock_create = Mock()
-        mock_create.redis.create.side_effect = [
+        mock_create.create.side_effect = [
             pykube.exceptions.KubernetesError(),
             True
         ]
         self.mock_pykube.Secret.return_value = mock_create
         self.assertIsInstance(self.operator.redis.operator_secrets, dict)
+        secrets = self.operator.redis.operator_secrets
+        self.assertIn('OperatorPassword', secrets)
+        self.assertIn('OperatorUsername', secrets)
+        self.assertIn('ReplPassword', secrets)
+        self.assertIn('ReplUsername', secrets)
+        self.assertIsInstance(secrets['OperatorPassword'], str)
+        self.assertIsInstance(secrets['OperatorUsername'], str)
+        self.assertIsInstance(secrets['ReplPassword'], str)
+        self.assertIsInstance(secrets['ReplUsername'], str)
 
     def test_property_redis_connections(self):
         self.assertIsInstance(self.operator.redis.connections, dict)
@@ -1331,7 +1340,7 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
     def test_redis_config_enforce_filter_config_options(self):
         with open('{0}/test_redis_config_enforce_filter_config_options.yaml'.format(self.data_path), 'r') as spec_yaml:
             spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
-        self.operator._spec = spec['spec']
+        self.operator.redis._spec = spec['spec']
 
         pod1 = pykube.Pod(
             api=self.mock_pykube_instance,
@@ -1364,7 +1373,7 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
     def test_redis_config_enforce_unknown_option(self):
         with open('{0}/test_redis_config_enforce_unknown_option.yaml'.format(self.data_path), 'r') as spec_yaml:
             spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
-        self.operator._spec = spec['spec']
+        self.operator.redis._spec = spec['spec']
 
         pod1 = pykube.Pod(
             api=self.mock_pykube_instance,

@@ -455,6 +455,7 @@ class RedisReplicationRedis(RedisReplicationBase):
         while True:
             try:
                 self.log.info('Creating Secret {0}-operator'.format(self.name))
+                pykube.Secret(self.api, secret_data).create()
                 self.log.info('Creating Secret {0}-operator, done'.format(self.name))
                 return secrets
             except pykube.exceptions.KubernetesError as err:
