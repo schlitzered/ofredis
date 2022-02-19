@@ -370,12 +370,16 @@ class RedisReplicationPod(RedisReplicationBase):
                 pod.update()
                 return
             except pykube.exceptions.HTTPError as err:
-                self.log.warning("{0} could not update pod: {1}, retrying".format(pod.name, err))
+                self.log.warning(
+                    "{0} could not update pod: {1}, retrying".format(pod.name, err)
+                )
                 self.stopped.wait(1)
                 retry -= 1
                 pod = self.get_by_name(pod_name=pod.name)
 
-        raise RedisReplicationRedisConnError("{0} could not update pod, no more retires left".format(pod.name))
+        raise RedisReplicationRedisConnError(
+            "{0} could not update pod, no more retires left".format(pod.name)
+        )
 
 
 class RedisReplicationRedis(RedisReplicationBase):
@@ -561,7 +565,9 @@ class RedisReplicationRedis(RedisReplicationBase):
             if 'RedisReplicationOperatorACLPresent' not in pod.labels:
                 self._create_operator_acls(pod=pod, ip_addr=ip_addr)
 
-            self.log.info("{0} trying to login with redis-operator credentials".format(pod.name))
+            self.log.info(
+                "{0} trying to login with redis-operator credentials".format(pod.name)
+            )
             client = pyredis.Client(
                 host=ip_addr,
                 username=self.operator_secrets['OperatorUsername'],
@@ -569,7 +575,11 @@ class RedisReplicationRedis(RedisReplicationBase):
             )
             client.ping()
             self.connections[pod.name] = client
-            self.log.info("{0} trying to login with redis-operator credentials, success".format(pod.name))
+            self.log.info(
+                "{0} trying to login with redis-operator credentials, success".format(
+                    pod.name
+                )
+            )
         except (
                 pyredis.exceptions.ReplyError,
                 pyredis.exceptions.PyRedisConnClosed,
@@ -578,7 +588,9 @@ class RedisReplicationRedis(RedisReplicationBase):
         ) as err:
             self.log.debug(err)
             self.log.error("{0} connection to pod went away".format(pod.name))
-            raise RedisReplicationRedisConnError("{0} pod went away".format(pod.name)) from err
+            raise RedisReplicationRedisConnError(
+                "{0} pod went away".format(pod.name)
+            ) from err
         self.log.info("{0} connecting to redis, done".format(pod.name))
 
     def client_get(self, pod):
@@ -838,7 +850,10 @@ class RedisReplicationRedis(RedisReplicationBase):
 
         else:
             if primary.name != self.operator_status.obj['status']['master']:
-                self.operator_status.patch({"status": {"master": primary.name}}, subresource='status')
+                self.operator_status.patch(
+                    {"status": {"master": primary.name}},
+                    subresource='status'
+                )
 
     def replication_primary_get_candidate(self):
         primary = None
@@ -876,12 +891,18 @@ class RedisReplicationRedis(RedisReplicationBase):
         primary = self.pod.primary
         primary_name = self.pod.primary_name
         if not primary:
-            self.log.warning("{0} no primary detected, skipping secondary enforcement".format(pod.name))
+            self.log.warning(
+                "{0} no primary detected, skipping secondary enforcement".format(pod.name)
+            )
             return
         try:
             primary_ip = primary.obj['status']['podIP']
         except KeyError:
-            self.log.warning("{0} could not get PodIP from primary pod {1}".format(pod.name, primary_name))
+            self.log.warning(
+                "{0} could not get PodIP from primary pod {1}".format(
+                    pod.name, primary_name
+                )
+            )
             return
         secrets = self.operator_secrets
         if pod.name == primary_name:
