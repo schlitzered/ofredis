@@ -1,7 +1,6 @@
 import base64
 import hashlib
 import uuid
-import unittest.mock
 from unittest.mock import Mock, PropertyMock, call
 
 import pykube
@@ -59,7 +58,6 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.redis_acl_mock = Mock()
         self.operator.acl_list = redis_client_mock
 
-        self.spec_acls_mock = unittest.mock.patch('ofredis.RedisReplication.spec_acls', new_callable=PropertyMock)
 
     def test_property_redis_acl_operator(self):
         self.operator.redis._operator_secrets = {
@@ -949,26 +947,343 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_redis_acls_enforce(self):
+        repl_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_repl = repl_acl
+
+        operator_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='operator_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_operator = operator_acl
+
+        redis_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='testuser',
+            user_enable='off'
+        )
+
+        spec_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='testuser',
+            user_enable='on',
+            passwords=['dummy', 'nopass']
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_acl_list_mock = Mock()
+        self.operator.redis.acl_list = redis_acl_list_mock
+        redis_acl_list_mock.return_value = {
+            'testuser': redis_acl
+        }
+
+        spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
+        spec_acls_mock.return_value = {
+            'testuser': spec_acl
+        }
+
+        acl_enforce_mock = Mock()
+        self.operator.redis.acl_enforce = acl_enforce_mock
+
+        self.operator.redis.acls_enforce(pod=self.pod_secondary)
+
+        acl_enforce_mock.assert_called_with(
+            pod=self.pod_secondary, username='testuser', redis_acl=redis_acl, spec_acl=spec_acl
+        )
+
+    def test_redis_acls_enforce_secret_missing(self):
+        repl_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_repl = repl_acl
+
+        operator_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='operator_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_operator = operator_acl
+
+        redis_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='testuser',
+            user_enable='off'
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_acl_list_mock = Mock()
+        self.operator.redis.acl_list = redis_acl_list_mock
+        redis_acl_list_mock.return_value = {
+            'testuser': redis_acl
+        }
+
+        spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
+        spec_acls_mock.side_effect = ofredis.RedisReplicationSecretMissing
+
+        acl_enforce_mock = Mock()
+        self.operator.redis.acl_enforce = acl_enforce_mock
+
+        self.operator.redis.acls_enforce(pod=self.pod_secondary)
+
+        acl_enforce_mock.assert_not_called()
+
+    def test_redis_acls_enforce_filter_operator_acl(self):
+        repl_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_repl = repl_acl
+
+        operator_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='operator_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_operator = operator_acl
+
+        redis_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='operator_user',
+            user_enable='off'
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_acl_list_mock = Mock()
+        self.operator.redis.acl_list = redis_acl_list_mock
+        redis_acl_list_mock.return_value = {
+            'operator_user': redis_acl
+        }
+
+        spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
+        spec_acls_mock.return_value = {}
+
+        acl_enforce_mock = Mock()
+        self.operator.redis.acl_enforce = acl_enforce_mock
+
+        self.operator.redis.acls_enforce(pod=self.pod_secondary)
+
+        acl_enforce_mock.assert_not_called()
+
+    def test_redis_acls_enforce_filter_repl_acl(self):
+        repl_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_repl = repl_acl
+
+        operator_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_operator = operator_acl
+
+        redis_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_acl_list_mock = Mock()
+        self.operator.redis.acl_list = redis_acl_list_mock
+        redis_acl_list_mock.return_value = {
+            'repl_user': redis_acl
+        }
+
+        spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
+        spec_acls_mock.return_value = {}
+
+        acl_enforce_mock = Mock()
+        self.operator.redis.acl_enforce = acl_enforce_mock
+
+        self.operator.redis.acls_enforce(pod=self.pod_secondary)
+
+        acl_enforce_mock.assert_not_called()
+
+    def test__acl_redis_default_user(self):
+        default_user = self.operator.redis._acl_redis_default_user()
+
+        self.assertEqual(default_user.username, 'default')
+        self.assertEqual(default_user.user_enable, 'off')
+
+    def test_redis_acls_enforce_reset_default(self):
+        repl_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_repl = repl_acl
+
+        operator_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_operator = operator_acl
+
+        redis_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='default',
+            user_enable='off'
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_acl_list_mock = Mock()
+        self.operator.redis.acl_list = redis_acl_list_mock
+        redis_acl_list_mock.return_value = {
+            'default': redis_acl
+        }
+
+        default_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='default',
+            user_enable='off'
+        )
+
+        _acl_redis_default_user_mock = Mock()
+        _acl_redis_default_user_mock.return_value = default_acl
+        self.operator.redis._acl_redis_default_user = _acl_redis_default_user_mock
+
+        spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
+        spec_acls_mock.return_value = {}
+
+        acl_enforce_mock = Mock()
+        self.operator.redis.acl_enforce = acl_enforce_mock
+
+        self.operator.redis.acls_enforce(pod=self.pod_secondary)
+
+        acl_enforce_mock.assert_called_with(
+            pod=self.pod_secondary,
+            username='default',
+            redis_acl=redis_acl,
+            spec_acl=default_acl
+        )
+
+    def test_redis_acls_delete_user(self):
+        repl_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_repl = repl_acl
+
+        operator_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='repl_user',
+            user_enable='off'
+        )
+
+        self.operator.redis._acl_operator = operator_acl
+
+        redis_acl = ofredis.RedisAcl(
+            logger=self.mock_logger,
+            username='dummy',
+            user_enable='off'
+        )
+
+        redis_client_mock = Mock()
+
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_acl_list_mock = Mock()
+        self.operator.redis.acl_list = redis_acl_list_mock
+        redis_acl_list_mock.return_value = {
+            'dummy': redis_acl
+        }
+
+        spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
+        spec_acls_mock.return_value = {}
+
+        acl_enforce_mock = Mock()
+        self.operator.redis.acl_enforce = acl_enforce_mock
+
+        self.operator.redis.acls_enforce(pod=self.pod_secondary)
+
+        acl_enforce_mock.assert_not_called()
+
+        redis_client_mock.execute.assert_called_with('ACL', 'DELUSER', 'dummy')
+
+    def test_acl_list(self):
         redis_client_mock = Mock()
         self.operator.redis.connections['pod_secondary'] = redis_client_mock
 
-        redis_acl_mock = Mock()
-        self.operator.redis.acl_list = redis_client_mock
-        redis_acl_mock.return_value = {
-            'dummy'
-        }
+        redis_client_mock.execute.return_value = [
+            b'user admin on #8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918 ~* &* +@all',
+            b'user dummy on nopass ~* &* +@all',
+            b'user default off resetchannels -@all',
+        ]
 
-        spec_acls_mock = unittest.mock.patch('ofredis.RedisReplication.spec_acls', new_callable=PropertyMock)
-        spec_acls_mock.return_value = {
-            'user1': 'blarg'
-        }
+        acls = self.operator.redis.acl_list(self.pod_secondary)
 
-    def test_redis_acls_enforce(self):
-        self.redis_acl_mock.return_value = {
-            'dummy'
-        }
+        self.assertEqual(acls['admin'].username, 'admin')
+        self.assertEqual(acls['dummy'].username, 'dummy')
+        self.assertEqual(acls['default'].username, 'default')
 
-        self.spec_acls_mock.return_value = {
-            'user1': 'blarg'
-        }
+    def test_acl_list_redis_exception(self):
+        redis_client_mock = Mock()
+        self.operator.redis.connections['pod_secondary'] = redis_client_mock
+
+        redis_client_mock.execute.side_effect = pyredis.exceptions.PyRedisConnClosed
+
+        self.assertRaises(
+            ofredis.RedisReplicationRedisConnError,
+            self.operator.redis.acl_list,
+            self.pod_secondary
+        )
+
+    def test_cleanup(self):
+        dummy_pod1 = Mock()
+        dummy_pod1.name = 'dummy_pod1'
+        dummy_pod2 = Mock()
+        dummy_pod2.name = 'dummy_pod2'
+        dummy_pod3 = Mock()
+        dummy_pod3.name = 'dummy_pod4'
+
+        self.operator.redis.connections['dummy_pod1'] = Mock()
+
+        pod_pods_mock = type(self.operator.pod).pods = PropertyMock()
+        self.operator.pod.pods = pod_pods_mock
+        pod_pods_mock.return_value = [
+            dummy_pod1, dummy_pod2, dummy_pod3
+        ]
+
+        self.assertIn('pod_secondary', self.operator.redis.connections)
+        self.operator.redis.cleanup()
+        self.assertNotIn('pod_secondary', self.operator.redis.connections)
+
 

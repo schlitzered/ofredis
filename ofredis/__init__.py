@@ -759,21 +759,23 @@ class RedisReplicationRedis(RedisReplicationBase):
             if username not in spec_acls:
                 client = self.client_get(pod=pod)
                 if username == 'default':
-                    default_user = RedisAcl(
-                        logger=self.log,
-                        username='default',
-                        user_enable='off'
-                    )
                     self.acl_enforce(
                         pod=pod,
                         username=username,
                         redis_acl=redis_acl,
-                        spec_acl=default_user
+                        spec_acl=self._acl_redis_default_user()
                     )
                 else:
                     self.log.info("{0} deleting user {1}".format(pod.name, username))
                     client.execute('ACL', 'DELUSER', username)
                     self.log.info("{0} deleting user {1}, done".format(pod.name, username))
+
+    def _acl_redis_default_user(self):
+        return RedisAcl(
+            logger=self.log,
+            username='default',
+            user_enable='off'
+        )
 
     def acl_list(self, pod):
         client = self.client_get(pod=pod)
@@ -789,11 +791,11 @@ class RedisReplicationRedis(RedisReplicationBase):
         acls = {}
         for acl in _acls:
             acl = acl.decode()
-            self.acl_parse(acl=acl, acls=acls)
+            self._acl_parse(acl=acl, acls=acls)
 
         return acls
 
-    def acl_parse(self, acl, acls):
+    def _acl_parse(self, acl, acls):
         acl = acl.split()
         acl.reverse()
         acl.pop()
@@ -820,16 +822,16 @@ class RedisReplicationRedis(RedisReplicationBase):
 
     def cleanup(self):
         redis_delete = []
-        for redis in self.connections:
+        for pod_name in self.connections:
             present = False
             for pod in self.pod.pods:
-                if pod.name == redis:
+                if pod.name == pod_name:
                     present = True
             if not present:
-                self.log.info("{0} removed from kubernetes, dropping connection".format(redis))
-                redis_delete.append(redis)
-        for redis in redis_delete:
-            self.connections.pop(redis)
+                self.log.info("{0} removed from kubernetes, dropping connection".format(pod_name))
+                redis_delete.append(pod_name)
+        for pod_name in redis_delete:
+            self.connections.pop(pod_name)
 
     def primary_enforce(self):
         primary = self.pod.primary

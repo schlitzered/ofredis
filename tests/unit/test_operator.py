@@ -17,12 +17,6 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
     def setUp(self):
         super().setUp()
 
-        self.mock_pykube_instance = Mock()
-        self.mock_pykube.HTTPClient.return_value = self.mock_pykube_instance
-
-        self.mock_pykube_pod_objects = Mock()
-        self.mock_pykube.Pod.objects.return_value = self.mock_pykube_pod_objects
-
         self.mock_pykube_rr_obj_objects = Mock()
         self.mock_pykube_rr_obj.objects.return_value = self.mock_pykube_rr_obj_objects
 
