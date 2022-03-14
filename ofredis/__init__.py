@@ -835,29 +835,23 @@ class RedisReplicationRedis(RedisReplicationBase):
 
     def primary_enforce(self):
         primary = self.pod.primary
-        if not primary:
-            self.log.info("no primary present")
-            pod = self.replication_primary_get_candidate()
-            try:
-                self.replication_primary_promote(pod=pod)
-            except RedisReplicationPodNotReady:
-                pass
-            except RedisReplicationRedisConnError as err:
-                self.connections.pop(pod.name, None)
-                self.log.error("{0} lost connection to redis on pod: {1}".format(
-                    pod, err
-                ))
-            except RedisReplicationPodError:
-                self.pod.delete(pod=pod)
+        if primary:
+            return
+        self.log.info("no primary present")
+        pod = self.primary_get_candidate()
+        try:
+            self.primary_promote(pod=pod)
+        except RedisReplicationPodNotReady:
+            pass
+        except RedisReplicationRedisConnError as err:
+            self.connections.pop(pod.name, None)
+            self.log.error("{0} lost connection to redis on pod: {1}".format(
+                pod, err
+            ))
+        except RedisReplicationPodError:
+            self.pod.delete(pod=pod)
 
-        else:
-            if primary.name != self.operator_status.obj['status']['master']:
-                self.operator_status.patch(
-                    {"status": {"master": primary.name}},
-                    subresource='status'
-                )
-
-    def replication_primary_get_candidate(self):
+    def primary_get_candidate(self):
         primary = None
         for pod in self.pod.pods:
             if not primary:
@@ -867,7 +861,7 @@ class RedisReplicationRedis(RedisReplicationBase):
                 primary = pod
         return primary
 
-    def replication_primary_promote(self, pod):
+    def primary_promote(self, pod):
         self.log.info('{0} promoting pod to primary'.format(pod))
         client = self.client_get(pod=pod)
         try:
@@ -889,7 +883,18 @@ class RedisReplicationRedis(RedisReplicationBase):
             self.log.error("{0} connection to pod went away".format(pod.name))
             raise RedisReplicationRedisConnError(err) from err
 
-    def replication_secondary_enforce(self, pod):
+    def primary_set_operator_status(self):
+        pod = self.pod.primary
+        if not pod:
+            return
+        if pod.name != self.operator_status.obj['status']['master']:
+            self.log.info("setting primary operator status to: {0}".format(pod.name))
+            self.operator_status.patch(
+                {"status": {"master": pod.name}},
+                subresource='status'
+            )
+
+    def secondary_enforce(self, pod):
         primary = self.pod.primary
         primary_name = self.pod.primary_name
         if not primary:
@@ -992,12 +997,13 @@ class RedisReplicationController(RedisReplicationBase):
             if changes:
                 self.update_object_status()
             self.redis.primary_enforce()
+            self.redis.primary_set_operator_status()
             self.redis.cleanup()
             for pod in self.pod.pods:
                 try:
                     self.redis.acls_enforce(pod=pod)
                     self.redis.config_enforce(pod=pod)
-                    self.redis.replication_secondary_enforce(pod=pod)
+                    self.redis.secondary_enforce(pod=pod)
                 except RedisReplicationPodError:
                     self.pod.delete(pod=pod)
                     self.redis.connections.pop(pod.name, None)

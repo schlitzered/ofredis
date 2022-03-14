@@ -1286,4 +1286,18 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.cleanup()
         self.assertNotIn('pod_secondary', self.operator.redis.connections)
 
+    def test_primary_enforce_primary_present(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = True
+
+        self.assertIsNone(self.operator.redis.primary_enforce())
+
+    def test_primary_enforce_no_primary(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = None
+
+        self.assertIsNone(self.operator.redis.primary_enforce())
+
+
+
 
