@@ -330,7 +330,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         self.operator.pod.create = Mock()
         self.operator.pod.delete = Mock()
 
-        self.assertTrue(self.operator.pod.ensure_count())
+        self.operator.pod.ensure_count()
 
         self.assertEqual(2, self.operator.pod.create.call_count)
 
@@ -406,7 +406,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         ]
         self.operator.pod.update_object_status = Mock()
 
-        self.assertTrue(self.operator.pod.ensure_count())
+        self.operator.pod.ensure_count()
 
         self.operator.pod.delete.assert_has_calls([
             call(pod=pod5),

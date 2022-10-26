@@ -154,7 +154,14 @@ class RedisAcl:
 
 
 class RedisReplicationBase:
-    def __init__(self, log, name, namespace, spec, stopped):
+    def __init__(
+            self,
+            log: logging.Logger,
+            name: str,
+            namespace: str,
+            spec: dict,
+            stopped
+    ):
         self._api = None
         self._log = log
         self._name = name
@@ -195,9 +202,26 @@ class RedisReplicationBase:
     def stopped(self):
         return self._stopped
 
+    def operator_status_update(self, key, value):
+        self.operator_status.patch(
+            {
+                "status": {
+                    key: value
+                }
+            },
+            subresource='status'
+        )
+
 
 class RedisReplicationPod(RedisReplicationBase):
-    def __init__(self, log, name, namespace, spec, stopped):
+    def __init__(
+            self,
+            log: logging.Logger,
+            name: str,
+            namespace: str,
+            spec: dict,
+            stopped
+    ):
         super().__init__(
             log=log,
             name=name,
@@ -313,7 +337,6 @@ class RedisReplicationPod(RedisReplicationBase):
         return self.secondaries
 
     def ensure_count(self):
-        changes = False
         num_pods = len(self.pods)
         while num_pods < self.spec['replicas']:
             self.log.info("we have {0} of {1} replicas".format(
@@ -322,7 +345,6 @@ class RedisReplicationPod(RedisReplicationBase):
             ))
             self.create()
             num_pods += 1
-            changes = True
         while num_pods > self.spec['replicas']:
             self.log.info("we have {0} of {1} replicas".format(
                 num_pods,
@@ -331,8 +353,6 @@ class RedisReplicationPod(RedisReplicationBase):
             candidate = self._delete_candidates().pop()
             self.delete(pod=candidate)
             num_pods -= 1
-            changes = True
-        return changes
 
     def get_by_name(self, pod_name):
         return pykube.Pod.objects(
@@ -383,7 +403,7 @@ class RedisReplicationPod(RedisReplicationBase):
 
 
 class RedisReplicationRedis(RedisReplicationBase):
-    def __init__(self, log, name, namespace, pod, spec, stopped):
+    def __init__(self, log, name, namespace, pod: RedisReplicationPod, spec, stopped):
         super().__init__(
             log=log,
             name=name,
@@ -839,6 +859,9 @@ class RedisReplicationRedis(RedisReplicationBase):
             return
         self.log.info("no primary present")
         pod = self.primary_get_candidate()
+        if not pod:
+            self.log.info("no primary candidate found")
+            return
         try:
             self.primary_promote(pod=pod)
         except RedisReplicationPodNotReady:
@@ -855,10 +878,13 @@ class RedisReplicationRedis(RedisReplicationBase):
         primary = None
         for pod in self.pod.pods:
             if not primary:
-                primary = pod
-            elif dateutil.parser.parse(pod.obj['status']['startTime']) < dateutil.parser.parse(
-                    primary.obj['status']['startTime']):
-                primary = pod
+                if pod.obj['status'].get('startTime', None):
+                    primary = pod
+            else:
+                if pod.obj['status'].get('startTime', None):
+                    if dateutil.parser.parse(pod.obj['status']['startTime']) < dateutil.parser.parse(
+                            primary.obj['status']['startTime']):
+                        primary = pod
         return primary
 
     def primary_promote(self, pod):
@@ -868,7 +894,7 @@ class RedisReplicationRedis(RedisReplicationBase):
             client.execute('replicaof', 'NO', 'ONE')
             client.execute('config', 'SET', 'masterauth', '')
             client.execute('config', 'SET', 'masteruser', '')
-            self.operator_status.patch({"status": {"master": pod.name}}, subresource='status')
+            self.operator_status_update(key='master', value=pod.name)
             self.pod.set_label(
                 pod=pod,
                 label_name='RedisReplicationRole',
@@ -882,17 +908,6 @@ class RedisReplicationRedis(RedisReplicationBase):
         ) as err:
             self.log.error("{0} connection to pod went away".format(pod.name))
             raise RedisReplicationRedisConnError(err) from err
-
-    def primary_set_operator_status(self):
-        pod = self.pod.primary
-        if not pod:
-            return
-        if pod.name != self.operator_status.obj['status']['master']:
-            self.log.info("setting primary operator status to: {0}".format(pod.name))
-            self.operator_status.patch(
-                {"status": {"master": pod.name}},
-                subresource='status'
-            )
 
     def secondary_enforce(self, pod):
         primary = self.pod.primary
@@ -944,7 +959,14 @@ class RedisReplicationRedis(RedisReplicationBase):
 
 
 class RedisReplicationController(RedisReplicationBase):
-    def __init__(self, stopped, spec, logger, name, namespace):
+    def __init__(
+            self,
+            stopped,
+            spec: dict,
+            logger: logging.Logger,
+            name: str,
+            namespace: str
+    ):
         super().__init__(
             log=logger,
             name=name,
@@ -993,11 +1015,8 @@ class RedisReplicationController(RedisReplicationBase):
         ))
         self.update_object_status()
         while not self.stopped:
-            changes = self.pod.ensure_count()
-            if changes:
-                self.update_object_status()
+            self.pod.ensure_count()
             self.redis.primary_enforce()
-            self.redis.primary_set_operator_status()
             self.redis.cleanup()
             for pod in self.pod.pods:
                 try:

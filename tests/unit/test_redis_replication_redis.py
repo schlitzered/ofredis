@@ -1267,12 +1267,9 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_cleanup(self):
-        dummy_pod1 = Mock()
-        dummy_pod1.name = 'dummy_pod1'
-        dummy_pod2 = Mock()
-        dummy_pod2.name = 'dummy_pod2'
-        dummy_pod3 = Mock()
-        dummy_pod3.name = 'dummy_pod4'
+        dummy_pod1 = self.create_pod_mock(count=1)
+        dummy_pod2 = self.create_pod_mock(count=2)
+        dummy_pod3 = self.create_pod_mock(count=3)
 
         self.operator.redis.connections['dummy_pod1'] = Mock()
 
@@ -1286,18 +1283,114 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.cleanup()
         self.assertNotIn('pod_secondary', self.operator.redis.connections)
 
+    def test_primary_get_candidate(self):
+        dummy_pod1 = self.create_pod_mock(count=1)
+        dummy_pod2 = self.create_pod_mock(count=2)
+        dummy_pod3 = self.create_pod_mock(count=3)
+
+        pod_pods_mock = type(self.operator.pod).pods = PropertyMock()
+        self.operator.pod.pods = pod_pods_mock
+        pod_pods_mock.return_value = [
+            dummy_pod3, dummy_pod2, dummy_pod1
+        ]
+
+        self.assertEqual(self.operator.redis.primary_get_candidate(), dummy_pod1)
+
+    def test_primary_get_candidate_no_status_startTime(self):
+        dummy_pod1 = self.create_pod_mock(count=1, start_time=False)
+        dummy_pod2 = self.create_pod_mock(count=2, start_time=False)
+        dummy_pod3 = self.create_pod_mock(count=3)
+
+        pod_pods_mock = type(self.operator.pod).pods = PropertyMock()
+        self.operator.pod.pods = pod_pods_mock
+        pod_pods_mock.return_value = [
+            dummy_pod1, dummy_pod2, dummy_pod3
+        ]
+
+        self.assertEqual(self.operator.redis.primary_get_candidate(), dummy_pod3)
+
     def test_primary_enforce_primary_present(self):
         pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
         pod_primary_mock.return_value = True
 
-        self.assertIsNone(self.operator.redis.primary_enforce())
+        self.operator.redis.primary_promote = Mock()
+        self.operator.redis.primary_get_candidate = Mock()
+
+        self.operator.redis.primary_enforce()
+
+        self.operator.redis.primary_get_candidate.assert_not_called()
+        self.operator.redis.primary_promote.assert_not_called()
+
+    def test_primary_enforce_primary_present_no_candidate(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = None
+        self.operator.redis.primary_get_candidate = Mock()
+        self.operator.redis.primary_get_candidate.return_value = None
+
+        self.operator.redis.primary_promote = Mock()
+
+        self.operator.redis.primary_enforce()
+
+        self.operator.redis.primary_get_candidate.assert_called()
+        self.operator.redis.primary_promote.assert_not_called()
 
     def test_primary_enforce_no_primary(self):
         pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
         pod_primary_mock.return_value = None
 
-        self.assertIsNone(self.operator.redis.primary_enforce())
+        dummy_pod1 = self.create_pod_mock(count=1)
+        self.operator.redis.primary_get_candidate = Mock()
+        self.operator.redis.primary_get_candidate.return_value = dummy_pod1
+        self.operator.redis.primary_promote = Mock()
 
+        self.operator.redis.primary_enforce()
 
+        self.operator.redis.primary_promote.assert_called_once_with(pod=dummy_pod1)
 
+    def test_primary_enforce_no_primary_present_candidate_not_ready(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = None
 
+        dummy_pod1 = self.create_pod_mock(count=1)
+        self.operator.redis.primary_get_candidate = Mock()
+        self.operator.redis.primary_get_candidate.return_value = dummy_pod1
+
+        self.operator.redis.primary_promote = Mock()
+        self.operator.redis.primary_promote.side_effect = ofredis.RedisReplicationPodNotReady
+
+        self.operator.redis.primary_enforce()
+
+    def test_primary_enforce_no_primary_present_redis_conn_error(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = None
+
+        dummy_pod1 = self.create_pod_mock(count=1)
+        self.operator.redis.primary_get_candidate = Mock()
+        self.operator.redis.primary_get_candidate.return_value = dummy_pod1
+
+        self.operator.redis.primary_promote = Mock()
+        self.operator.redis.primary_promote.side_effect = ofredis.RedisReplicationRedisConnError
+        self.operator.pod.delete = Mock()
+
+        self.operator.redis.connections[dummy_pod1.name] = None
+
+        self.assertIn(dummy_pod1.name, self.operator.redis.connections)
+
+        self.operator.redis.primary_enforce()
+
+        self.assertNotIn(dummy_pod1.name, self.operator.redis.connections)
+
+    def test_primary_enforce_no_primary_present_candidate_pod_error(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = None
+
+        dummy_pod1 = self.create_pod_mock(count=1)
+        self.operator.redis.primary_get_candidate = Mock()
+        self.operator.redis.primary_get_candidate.return_value = dummy_pod1
+
+        self.operator.redis.primary_promote = Mock()
+        self.operator.redis.primary_promote.side_effect = ofredis.RedisReplicationPodError
+        self.operator.pod.delete = Mock()
+
+        self.operator.redis.primary_enforce()
+        self.operator.pod.delete.assert_called_with(pod=dummy_pod1)

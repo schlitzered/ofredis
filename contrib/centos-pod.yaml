@@ -6,30 +6,30 @@ metadata:
   name: centos
   namespace: default
 spec:
-  volumes:
-    - name: nfs-2-fab-lab-dummy
-      persistentVolumeClaim:
-        claimName: nfs-2.fab.lab.dummy
+#  volumes:
+#    - name: nfs-2-fab-lab-dummy
+#      persistentVolumeClaim:
+#        claimName: nfs-2.fab.lab.dummy
   containers:
-  - image: centos:8
+  - image: almalinux:9
     name: centos
     command: ['sleep', '3600']
     resources: {}
-    volumeMounts:
-      - mountPath: "/mnt/blarg"
-        name: nfs-2-fab-lab-dummy
-  nodeSelector:
-    topology.kubernetes.io/zone: labb
-status: {}
----
-kind: PersistentVolumeClaim
-apiVersion: v1
-metadata:
-  name: nfs-2.fab.lab.dummy
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: nfs-2.fab.lab
+#    volumeMounts:
+#      - mountPath: "/mnt/blarg"
+#        name: nfs-2-fab-lab-dummy
+#  nodeSelector:
+#    topology.kubernetes.io/zone: labb
+#status: {}
+#---
+#kind: PersistentVolumeClaim
+#apiVersion: v1
+#metadata:
+#  name: nfs-2.fab.lab.dummy
+#spec:
+#  accessModes:
+#    - ReadWriteOnce
+#  resources:
+#    requests:
+#      storage: 10Gi
+#  storageClassName: nfs-2.fab.lab

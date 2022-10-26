@@ -1,3 +1,4 @@
+import datetime
 import os
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -44,3 +45,27 @@ class TestRedisReplicationUnitBase(TestCase):
             name=self.mock_name,
             namespace=self.mock_namespace,
         )
+
+    @staticmethod
+    def create_pod_mock(
+            count,
+            phase='Running',
+            start_time=True,
+    ):
+        pod = Mock()
+        date = datetime.datetime.utcnow()
+        date += datetime.timedelta(seconds=count)
+        pod.name = f'dummy_pod{count}'
+        pod.obj = {
+            'status':
+                {'phase': phase,
+                 'conditions':
+                     [],
+                 'podIP': f'172.17.0.{count}',
+                 }
+        }
+        if start_time:
+            pod.obj['status']['startTime'] = date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        pod.labels = {}
+        return pod
+
