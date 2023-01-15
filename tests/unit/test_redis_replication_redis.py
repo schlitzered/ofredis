@@ -1394,3 +1394,143 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis.primary_enforce()
         self.operator.pod.delete.assert_called_with(pod=dummy_pod1)
+
+    def test_primary_promote(self):
+        dummy_pod = self.create_pod_mock(count=1)
+
+        client = Mock()
+        self.operator.redis.connections[dummy_pod.name] = client
+        self.operator.redis.operator_status_update = Mock()
+        self.operator.pod.set_label = Mock()
+
+        self.operator.redis.client_get(pod=dummy_pod)
+        self.operator.redis.primary_promote(pod=dummy_pod)
+
+        client.execute.assert_has_calls([
+            call('REPLICAOF', 'NO', 'ONE'),
+            call('CONFIG', 'SET', 'masterauth', ''),
+            call('CONFIG', 'SET', 'masteruser', ''),
+        ])
+
+        self.operator.redis.operator_status_update.assert_called_with(
+            key='master', value=dummy_pod.name
+        )
+
+        self.operator.pod.set_label.assert_called_with(
+            pod=dummy_pod,
+            label_name='RedisReplicationRole',
+            label_value='Primary'
+        )
+
+    def test_primary_promote_redis_conn_error(self):
+        dummy_pod = self.create_pod_mock(count=1)
+
+        client = Mock()
+        client.execute.side_effect = pyredis.exceptions.PyRedisConnError
+
+        self.operator.redis.connections[dummy_pod.name] = client
+        self.operator.redis.operator_status_update = Mock()
+        self.operator.pod.set_label = Mock()
+
+        with self.assertRaises(ofredis.RedisReplicationRedisConnError):
+            self.operator.redis.primary_promote(pod=dummy_pod)
+
+        self.operator.redis.operator_status_update.assert_not_called()
+        self.operator.pod.set_label.assert_not_called()
+
+    def test_secondary_enforce_no_primary(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = None
+
+        dummy_pod1 = self.create_pod_mock(count=1)
+
+        self.operator.redis.secondary_enforce(pod=dummy_pod1)
+
+    def test_secondary_enforce_with_primary_eq_pod(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        primary_pod = self.create_pod_mock(count=1)
+        pod_primary_mock.return_value = primary_pod
+
+        self.operator.redis.secondary_enforce(pod=primary_pod)
+
+    def test_secondary_enforce_with_primary_ip_not_ready(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        primary_pod = self.create_pod_mock(count=1)
+        del primary_pod.obj['status']['podIP']
+        pod_primary_mock.return_value = primary_pod
+
+        dummy_pod1 = self.create_pod_mock(count=2)
+
+        self.operator.redis.secondary_enforce(pod=dummy_pod1)
+
+    def test_secondary_enforce_with_primary_already_configured(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = self.create_pod_mock(count=1)
+
+        dummy_pod1 = self.create_pod_mock(count=2)
+
+        client = Mock()
+        client.execute.return_value = [b'replicaof', pod_primary_mock.obj['metadata']['podIP'].encode('utf-8')]
+        self.operator.redis.connections[dummy_pod1.name] = client
+
+        self.operator.redis._operator_secrets = {
+            "ReplUsername": str(uuid.uuid4()),
+            "ReplPassword": str(uuid.uuid4()),
+        }
+
+        self.operator.redis.secondary_enforce(pod=dummy_pod1)
+        client.execute.assert_has_calls([
+            call('CONFIG', 'GET', 'REPLICAOF'),
+        ])
+
+    def test_secondary_enforce_redis_exception(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = self.create_pod_mock(count=1)
+
+        dummy_pod1 = self.create_pod_mock(count=2)
+
+        client = Mock()
+        client.execute.side_effect = [
+            [b'replicaof', b""],
+            pyredis.exceptions.PyRedisConnError
+        ]
+        self.operator.redis.connections[dummy_pod1.name] = client
+
+        self.operator.redis._operator_secrets = {
+            "ReplUsername": str(uuid.uuid4()),
+            "ReplPassword": str(uuid.uuid4()),
+        }
+
+        with self.assertRaises(ofredis.RedisReplicationRedisConnError):
+            self.operator.redis.secondary_enforce(pod=dummy_pod1)
+
+    def test_secondary_enforce(self):
+        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock.return_value = self.create_pod_mock(count=1)
+
+        dummy_pod1 = self.create_pod_mock(count=2)
+
+        self.operator.redis._operator_secrets = {
+            "ReplUsername": str(uuid.uuid4()),
+            "ReplPassword": str(uuid.uuid4()),
+        }
+
+        client = Mock()
+        client.execute.side_effect = [
+            [b'replicaof', b""],
+            [b'masterauth', self.operator.redis._operator_secrets['ReplPassword'].encode('utf-8')],
+            [b'masteruser', self.operator.redis._operator_secrets['ReplUsername'].encode('utf-8')],
+            [b'OK'],
+        ]
+
+        self.operator.redis.connections[dummy_pod1.name] = client
+
+
+        self.operator.redis.secondary_enforce(pod=dummy_pod1)
+
+        client.execute.assert_has_calls([
+            call('CONFIG', 'GET', 'REPLICAOF'),
+            call('CONFIG', 'SET', 'MASTERAUTH', self.operator.redis._operator_secrets['ReplPassword']),
+            call('CONFIG', 'SET', 'MASTERUSER', self.operator.redis._operator_secrets['ReplUsername']),
+            call('REPLICAOF', self.operator.pod.primary.obj['status']['podIP'], '6379'),
+        ])

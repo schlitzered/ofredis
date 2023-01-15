@@ -891,9 +891,9 @@ class RedisReplicationRedis(RedisReplicationBase):
         self.log.info('{0} promoting pod to primary'.format(pod))
         client = self.client_get(pod=pod)
         try:
-            client.execute('replicaof', 'NO', 'ONE')
-            client.execute('config', 'SET', 'masterauth', '')
-            client.execute('config', 'SET', 'masteruser', '')
+            client.execute('REPLICAOF', 'NO', 'ONE')
+            client.execute('CONFIG', 'SET', 'masterauth', '')
+            client.execute('CONFIG', 'SET', 'masteruser', '')
             self.operator_status_update(key='master', value=pod.name)
             self.pod.set_label(
                 pod=pod,
@@ -917,6 +917,8 @@ class RedisReplicationRedis(RedisReplicationBase):
                 "{0} no primary detected, skipping secondary enforcement".format(pod.name)
             )
             return
+        if pod.name == primary_name:
+            return
         try:
             primary_ip = primary.obj['status']['podIP']
         except KeyError:
@@ -927,20 +929,18 @@ class RedisReplicationRedis(RedisReplicationBase):
             )
             return
         secrets = self.operator_secrets
-        if pod.name == primary_name:
-            return
         try:
             client = self.client_get(pod=pod)
-            replof = (client.execute('config', 'get', 'replicaof'))[1]
+            replof = (client.execute('CONFIG', 'GET', 'REPLICAOF'))[1]
             replof = replof.decode()
             if replof.startswith(primary_ip):
                 return
             self.log.info("{0} making pod replica of pod {1}".format(
                 pod.name, primary_name
             ))
-            client.execute('config', 'SET', 'masterauth', secrets['ReplPassword'])
-            client.execute('config', 'SET', 'masteruser', secrets['ReplUsername'])
-            client.execute('replicaof', primary_ip, '6379')
+            client.execute('CONFIG', 'SET', 'MASTERAUTH', secrets['ReplPassword'])
+            client.execute('CONFIG', 'SET', 'MASTERUSER', secrets['ReplUsername'])
+            client.execute('REPLICAOF', primary_ip, '6379')
             self.pod.set_label(
                 pod=pod,
                 label_name='RedisReplicationRole',
