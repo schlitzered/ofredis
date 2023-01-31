@@ -17,5 +17,6 @@ spec:
       serviceAccountName: redis-operator-account
       containers:
       - name: redis-operator
-        image: schlitzered/redis-farts:latest
+        image: schlitzered/redis-farts:testing
+        imagePullPolicy: Always
 
