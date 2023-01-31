@@ -10,6 +10,8 @@ import pykube
 import pyredis
 import pyredis.exceptions
 
+import ofredis.indices
+
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 sha256_regex = re.compile('^[A-Fa-f0-9]{64}$')
@@ -34,13 +36,14 @@ async def configure(settings: kopf.OperatorSettings, **_):
 
 
 @kopf.daemon('redis-replications')
-def redis_monitor_daemon(stopped, logger, spec, name, namespace, **__):
+def redis_monitor_daemon(stopped, logger, spec, name, namespace, pod_index, **__):
     redis_repl = RedisReplicationController(
         logger=logger,
         name=name,
         namespace=namespace,
         spec=spec,
-        stopped=stopped
+        stopped=stopped,
+        pod_index=pod_index
     )
     redis_repl.run()
 
@@ -220,8 +223,10 @@ class RedisReplicationPod(RedisReplicationBase):
             name: str,
             namespace: str,
             spec: dict,
-            stopped
+            stopped,
+            pod_index: dict
     ):
+        self._pod_index = pod_index
         super().__init__(
             log=log,
             name=name,
@@ -231,14 +236,16 @@ class RedisReplicationPod(RedisReplicationBase):
         )
 
     @property
+    def pod_index(self):
+        return dict(self._pod_index)
+
+    @property
     def pods(self):
-        pods = pykube.Pod.objects(
-            self.api
-        ).filter(
-            namespace=self.namespace,
-            selector={'RedisReplication': self.name}
-        )
-        return self._pod_remove_deleted(pods=pods)
+        pods = list()
+        index_key = f'{self.namespace}_{self.name}'
+        for pod in self.pod_index.get(index_key, []):
+            pods.append(pod)
+        return pods
 
     @property
     def primary(self):
@@ -259,28 +266,24 @@ class RedisReplicationPod(RedisReplicationBase):
 
     @property
     def primaries(self):
-        pods = pykube.Pod.objects(
-            self.api
-        ).filter(
-            namespace=self.namespace,
-            selector={
-                'RedisReplication': self.name,
-                'RedisReplicationRole': 'Primary',
-            }
-        )
+        pods = list()
+        for pod in self.pods:
+            try:
+                if pod.labels['RedisReplicationRole'] == 'Primary':
+                    pods.append(pod)
+            except KeyError:
+                pass
         return self._pod_remove_deleted(pods=pods)
 
     @property
     def secondaries(self):
-        pods = pykube.Pod.objects(
-            self.api
-        ).filter(
-            namespace=self.namespace,
-            selector={
-                'RedisReplication': self.name,
-                'RedisReplicationRole': 'Secondary',
-            }
-        )
+        pods = list()
+        for pod in self.pods:
+            try:
+                if pod.labels['RedisReplicationRole'] == 'Secondary':
+                    pods.append(pod)
+            except KeyError:
+                pass
         return self._pod_remove_deleted(pods=pods)
 
     @staticmethod
@@ -345,6 +348,7 @@ class RedisReplicationPod(RedisReplicationBase):
             ))
             self.create()
             num_pods += 1
+            self.ensure_count_len(pod_len=num_pods)
         while num_pods > self.spec['replicas']:
             self.log.info("we have {0} of {1} replicas".format(
                 num_pods,
@@ -353,14 +357,17 @@ class RedisReplicationPod(RedisReplicationBase):
             candidate = self._delete_candidates().pop()
             self.delete(pod=candidate)
             num_pods -= 1
+            self.ensure_count_len(pod_len=num_pods)
+
+    def ensure_count_len(self, pod_len):
+        while len(self.pods) != pod_len:
+            self.log.info("internal pod count not yet matching with index, waiting")
+            self.stopped.wait(1)
 
     def get_by_name(self, pod_name):
-        return pykube.Pod.objects(
-            self.api
-        ).filter(
-            namespace=self.namespace,
-            selector={'RedisReplication': self.name}
-        ).get(name=pod_name)
+        for pod in self.pods:
+            if pod.name == pod_name:
+                return pod
 
     def is_ready(self, pod):
         self.log.info("{0} checking if pod is running".format(pod.name))
@@ -965,7 +972,8 @@ class RedisReplicationController(RedisReplicationBase):
             spec: dict,
             logger: logging.Logger,
             name: str,
-            namespace: str
+            namespace: str,
+            pod_index: dict
     ):
         super().__init__(
             log=logger,
@@ -979,7 +987,8 @@ class RedisReplicationController(RedisReplicationBase):
             name=name,
             namespace=namespace,
             spec=spec,
-            stopped=stopped
+            stopped=stopped,
+            pod_index=pod_index
         )
         self._redis = RedisReplicationRedis(
             log=self.log,
@@ -1018,6 +1027,8 @@ class RedisReplicationController(RedisReplicationBase):
             self.pod.ensure_count()
             self.redis.primary_enforce()
             self.redis.cleanup()
+            for pod_ns, pod_names in self.pod.pod_index.items():
+                self.log.info(f"ns {pod_ns} contains {len(pod_names)}")
             for pod in self.pod.pods:
                 try:
                     self.redis.acls_enforce(pod=pod)

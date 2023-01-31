@@ -3,6 +3,7 @@ import os
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+import kopf
 import pykube
 import pyredis.exceptions
 
@@ -44,10 +45,11 @@ class TestRedisReplicationUnitBase(TestCase):
             logger=self.mock_logger,
             name=self.mock_name,
             namespace=self.mock_namespace,
+            pod_index=dict()
         )
 
-    @staticmethod
     def create_pod_mock(
+            self,
             count,
             phase='Running',
             start_time=True,
@@ -66,6 +68,10 @@ class TestRedisReplicationUnitBase(TestCase):
         }
         if start_time:
             pod.obj['status']['startTime'] = date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        pod.metadata = {
+            'name': self.mock_name,
+            'namespace': self.mock_namespace
+        }
         pod.labels = {}
         return pod
 
