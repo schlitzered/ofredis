@@ -3,9 +3,7 @@ import os
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-import kopf
 import pykube
-import pyredis.exceptions
 
 import ofredis
 
@@ -19,19 +17,15 @@ class TestRedisReplicationUnitBase(TestCase):
         kopf_patcher = patch('ofredis.kopf', autospec=True)
         self.mock_kopf = kopf_patcher.start()
 
-        pykube_patcher = patch('ofredis.pykube', autospec=True)
+        self.mock_pykube_instance = Mock()
+
+        pykube_patcher = patch('ofredis.rrbase.pykube', autospec=True)
         self.mock_pykube = pykube_patcher.start()
         self.mock_pykube.exceptions = pykube.exceptions
-
-        self.mock_pykube_instance = Mock()
         self.mock_pykube.HTTPClient.return_value = self.mock_pykube_instance
 
-        pykube_rr_obj_patcher = patch('ofredis.PyKubeRedisReplication', autospec=True)
+        pykube_rr_obj_patcher = patch('ofredis.rrbase.PyKubeRedisReplication', autospec=True)
         self.mock_pykube_rr_obj = pykube_rr_obj_patcher.start()
-
-        pyredis_patcher = patch('ofredis.pyredis', autospec=True)
-        self.mock_pyredis = pyredis_patcher.start()
-        self.mock_pyredis.exceptions = pyredis.exceptions
 
         self.mock_stopped = Mock()
         self.mock_spec = dict()

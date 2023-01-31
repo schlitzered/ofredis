@@ -1,4 +1,4 @@
-from unittest.mock import Mock, call
+from unittest.mock import Mock, call, patch
 
 import pykube
 import yaml
@@ -12,6 +12,14 @@ from ofredis import RedisReplicationErrorToManyPrimaries
 class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
     def setUp(self):
         super().setUp()
+
+        kopf_patcher = patch('ofredis.rrpod.kopf', autospec=True)
+        self.mock_kopf = kopf_patcher.start()
+
+        pykube_patcher = patch('ofredis.rrpod.pykube', autospec=True)
+        self.mock_pykube = pykube_patcher.start()
+        self.mock_pykube.exceptions = pykube.exceptions
+        self.mock_pykube.HTTPClient.return_value = self.mock_pykube_instance
 
         self.mock_pykube_instance = Mock()
         self.mock_pykube.HTTPClient.return_value = self.mock_pykube_instance

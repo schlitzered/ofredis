@@ -1,7 +1,7 @@
 import base64
 import hashlib
 import uuid
-from unittest.mock import Mock, PropertyMock, call
+from unittest.mock import Mock, PropertyMock, call, patch
 
 import pykube
 import pyredis.exceptions
@@ -15,6 +15,18 @@ import ofredis
 class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
     def setUp(self):
         super().setUp()
+
+        kopf_patcher = patch('ofredis.rrredis.kopf', autospec=True)
+        self.mock_kopf = kopf_patcher.start()
+
+        pykube_patcher = patch('ofredis.rrredis.pykube', autospec=True)
+        self.mock_pykube = pykube_patcher.start()
+        self.mock_pykube.exceptions = pykube.exceptions
+        self.mock_pykube.HTTPClient.return_value = self.mock_pykube_instance
+
+        pyredis_patcher = patch('ofredis.rrredis.pyredis', autospec=True)
+        self.mock_pyredis = pyredis_patcher.start()
+        self.mock_pyredis.exceptions = pyredis.exceptions
 
         self.mock_pykube_secret_objects = Mock()
         self.mock_pykube.Secret.objects.return_value = self.mock_pykube_secret_objects
@@ -58,14 +70,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.redis_acl_mock = Mock()
         self.operator.acl_list = redis_client_mock
 
-
     def test_property_redis_acl_operator(self):
         self.operator.redis._operator_secrets = {
             "OperatorUsername": str(uuid.uuid4()),
             "OperatorPassword": str(uuid.uuid4()),
         }
         acl = self.operator.redis.acl_operator
-        self.assertIsInstance(acl, ofredis.RedisAcl)
+        self.assertIsInstance(acl, ofredis.rrredis.RedisAcl)
         self.assertEqual(acl.log, self.mock_logger)
         self.assertEqual(
             acl.username, self.operator.redis.operator_secrets['OperatorUsername']
@@ -92,7 +103,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
             "ReplPassword": str(uuid.uuid4()),
         }
         acl = self.operator.redis.acl_repl
-        self.assertIsInstance(acl, ofredis.RedisAcl)
+        self.assertIsInstance(acl, ofredis.rrredis.RedisAcl)
         self.assertEqual(acl.log, self.mock_logger)
         self.assertEqual(
             acl.username, self.operator.redis.operator_secrets['ReplUsername']
@@ -708,13 +719,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_redis_acl_enforce_no_diff(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on'
@@ -734,7 +745,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.assertFalse(redis_client_mock.execute.called)
 
     def test_redis_acl_enforce_no_redis_acl(self):
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on'
@@ -756,13 +767,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_redis_acl_enforce_diff_user_enable(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on'
@@ -782,13 +793,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.assert_called_with('ACL', 'SETUSER', 'testuser', 'on')
 
     def test_redis_acl_enforce_diff_commands(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -809,13 +820,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.assert_called_with('ACL', 'SETUSER', 'testuser', 'on', 'SET', 'GET', '-@all')
 
     def test_redis_acl_enforce_diff_key_patterns(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -836,13 +847,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.assert_called_with('ACL', 'SETUSER', 'testuser', 'on', 'resetkeys', '~dummy*')
 
     def test_redis_acl_enforce_diff_pubsub_patterns(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -863,13 +874,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.assert_called_with('ACL', 'SETUSER', 'testuser', 'on', 'resetchannels', '&dummy*')
 
     def test_redis_acl_enforce_diff_pubsub_passwords(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -890,13 +901,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.assert_called_with('ACL', 'SETUSER', 'testuser', 'on', 'resetpass', 'dummy')
 
     def test_redis_acl_enforce_diff_pubsub_passwords_nopass(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -917,13 +928,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.assert_called_with('ACL', 'SETUSER', 'testuser', 'on', 'nopass')
 
     def test_redis_acl_enforce_redis_exception(self):
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -947,7 +958,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_redis_acls_enforce(self):
-        repl_acl = ofredis.RedisAcl(
+        repl_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -955,7 +966,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_repl = repl_acl
 
-        operator_acl = ofredis.RedisAcl(
+        operator_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='operator_user',
             user_enable='off'
@@ -963,13 +974,13 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_operator = operator_acl
 
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
         )
 
-        spec_acl = ofredis.RedisAcl(
+        spec_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='on',
@@ -1001,7 +1012,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_redis_acls_enforce_secret_missing(self):
-        repl_acl = ofredis.RedisAcl(
+        repl_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1009,7 +1020,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_repl = repl_acl
 
-        operator_acl = ofredis.RedisAcl(
+        operator_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='operator_user',
             user_enable='off'
@@ -1017,7 +1028,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_operator = operator_acl
 
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='testuser',
             user_enable='off'
@@ -1044,7 +1055,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         acl_enforce_mock.assert_not_called()
 
     def test_redis_acls_enforce_filter_operator_acl(self):
-        repl_acl = ofredis.RedisAcl(
+        repl_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1052,7 +1063,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_repl = repl_acl
 
-        operator_acl = ofredis.RedisAcl(
+        operator_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='operator_user',
             user_enable='off'
@@ -1060,7 +1071,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_operator = operator_acl
 
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='operator_user',
             user_enable='off'
@@ -1087,7 +1098,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         acl_enforce_mock.assert_not_called()
 
     def test_redis_acls_enforce_filter_repl_acl(self):
-        repl_acl = ofredis.RedisAcl(
+        repl_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1095,7 +1106,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_repl = repl_acl
 
-        operator_acl = ofredis.RedisAcl(
+        operator_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1103,7 +1114,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_operator = operator_acl
 
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1136,7 +1147,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.assertEqual(default_user.user_enable, 'off')
 
     def test_redis_acls_enforce_reset_default(self):
-        repl_acl = ofredis.RedisAcl(
+        repl_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1144,7 +1155,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_repl = repl_acl
 
-        operator_acl = ofredis.RedisAcl(
+        operator_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1152,7 +1163,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_operator = operator_acl
 
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='default',
             user_enable='off'
@@ -1168,7 +1179,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
             'default': redis_acl
         }
 
-        default_acl = ofredis.RedisAcl(
+        default_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='default',
             user_enable='off'
@@ -1194,7 +1205,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_redis_acls_delete_user(self):
-        repl_acl = ofredis.RedisAcl(
+        repl_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1202,7 +1213,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_repl = repl_acl
 
-        operator_acl = ofredis.RedisAcl(
+        operator_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='repl_user',
             user_enable='off'
@@ -1210,7 +1221,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis._acl_operator = operator_acl
 
-        redis_acl = ofredis.RedisAcl(
+        redis_acl = ofredis.rrredis.RedisAcl(
             logger=self.mock_logger,
             username='dummy',
             user_enable='off'
