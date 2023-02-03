@@ -178,9 +178,6 @@ spec:
                   replication
                 format: int64
                 type: integer
-            required:
-              - replicas
-              - master
             type: object
             x-kubernetes-preserve-unknown-fields: true
         required:

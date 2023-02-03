@@ -72,10 +72,8 @@ class RedisAcl:
     def commands(self, value):
         if value is None:
             self._commands = set()
-        elif isinstance(value, list):
-            self._commands = set(value)
         else:
-            raise ValueError("commands is expected to be a list")
+            self._commands = set(value)
 
     @property
     def key_patterns(self):
@@ -87,10 +85,8 @@ class RedisAcl:
     def key_patterns(self, value):
         if value is None:
             self._key_patterns = set()
-        elif isinstance(value, list):
-            self._key_patterns = set(value)
         else:
-            raise ValueError("keyPatterns is expected to be a list")
+            self._key_patterns = set(value)
 
     @property
     def passwords(self):
@@ -100,10 +96,8 @@ class RedisAcl:
     def passwords(self, value):
         if value is None:
             self._passwords = set()
-        elif isinstance(value, list):
-            self._passwords = set(value)
         else:
-            raise ValueError("passwords is expected to be a list")
+            self._passwords = set(value)
 
     @property
     def pubsub_patterns(self):
@@ -115,10 +109,8 @@ class RedisAcl:
     def pubsub_patterns(self, value):
         if value is None:
             self._pubsub_patterns = set()
-        elif isinstance(value, list):
-            self._pubsub_patterns = set(value)
         else:
-            raise ValueError("pubsubPatterns is expected to be a list")
+            self._pubsub_patterns = set(value)
 
     @property
     def username(self):
@@ -130,8 +122,6 @@ class RedisAcl:
 
     @user_enable.setter
     def user_enable(self, enable):
-        if enable not in ['on', 'off']:
-            raise ValueError("user_enable needs to be either 'on' or 'off'")
         self._user_enable = enable
 
 
@@ -218,7 +208,7 @@ class RedisReplicationRedis(RedisReplicationBase):
             except pykube.exceptions.KubernetesError as err:
                 self.log.error('Creating Secret {0}-operator failed, {1}'.format(self.name, err))
                 self.log.error("retrying in 10 seconds")
-                self.stopped.wait(10)
+                self.wait(10)
 
     def _operator_secrets_get(self):
         try:

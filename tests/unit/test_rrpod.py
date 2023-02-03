@@ -1,4 +1,4 @@
-from unittest.mock import Mock, call, patch
+from unittest.mock import Mock, call, patch, PropertyMock
 
 import pykube
 import yaml
@@ -63,6 +63,22 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             [pod1]
         )
 
+    def test_property_pod_primaries_missing_label(self):
+        pod1 = self.create_pod_mock(1)
+        pod1.labels = {'RedisReplicationRole': 'Primary'}
+
+        pod2 = self.create_pod_mock(2)
+        pod2.labels = {'RedisReplicationRole': 'Secondary'}
+
+        pod3 = self.create_pod_mock(2)
+
+        self.operator.pod._pod_index[f'{self.mock_namespace}_{self.mock_name}'] = [pod1, pod2, pod3]
+
+        self.assertEqual(
+            self.operator.pod.primaries,
+            [pod1]
+        )
+
     def test_property_pod_primary_zero(self):
         self.operator.pod._pod_index[f'{self.mock_namespace}_{self.mock_name}'] = []
         self.assertIsNone(self.operator.pod.primary)
@@ -111,6 +127,22 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             [pod2]
         )
 
+    def test_property_pod_secondaries_missing_label(self):
+        pod1 = self.create_pod_mock(1)
+        pod1.labels = {'RedisReplicationRole': 'Primary'}
+
+        pod2 = self.create_pod_mock(2)
+        pod2.labels = {'RedisReplicationRole': 'Secondary'}
+
+        pod3 = self.create_pod_mock(2)
+
+        self.operator.pod._pod_index[f'{self.mock_namespace}_{self.mock_name}'] = [pod1, pod2, pod3]
+
+        self.assertEqual(
+            self.operator.pod.secondaries,
+            [pod2]
+        )
+
     def test_pod_create(self):
         with open('{0}/test_pod_create.yaml'.format(self.data_path), 'r') as spec_yaml:
             spec = yaml.load(spec_yaml.read(), yaml.SafeLoader)
@@ -134,8 +166,11 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
                 ]
             }
         }
+
         mock_create = Mock()
         self.mock_pykube.Pod.return_value = mock_create
+
+        self.operator.pod.wait_pod_is_ready = Mock()
 
         self.operator.pod.create()
 
@@ -149,13 +184,17 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         )
 
         mock_create.create.assert_called()
+        self.operator.pod.wait_pod_is_ready.assert_called_with(pod=mock_create)
 
     def test_pod_delete(self):
         dummy_pod = Mock()
         dummy_pod.name = 'dummy_pod'
+        self.operator.pod.wait_pod_removed_from_index = Mock()
+
         self.operator.pod.delete(dummy_pod)
 
         dummy_pod.delete.assert_called()
+        self.operator.pod.wait_pod_removed_from_index.assert_called_with(pod=dummy_pod)
 
     def test_pod_delete_candidates_unconfigured(self):
         pod1 = self.create_pod_mock(1)
@@ -200,13 +239,13 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
 
         self.operator.pod.create = Mock()
         self.operator.pod.delete = Mock()
-        self.operator.pod.update_object_status = Mock()
+        self.operator.pod.operator_status_init = Mock()
 
         self.assertFalse(self.operator.pod.ensure_count())
 
         self.assertFalse(self.operator.pod.create.called)
         self.assertFalse(self.operator.pod.delete.called)
-        self.assertFalse(self.operator.pod.update_object_status.called)
+        self.assertFalse(self.operator.pod.operator_status_init.called)
 
     def test_pod_ensure_count_two_missing(self):
         with open('{0}/test_pod_create.yaml'.format(self.data_path), 'r') as spec_yaml:
@@ -218,16 +257,11 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         self.operator.pod._pod_index[f'{self.mock_namespace}_{self.mock_name}'] = [pod1]
 
         self.operator.pod.create = Mock()
-        self.operator.pod.ensure_count_len = Mock()
+        self.operator.pod.wait = Mock()
 
         self.operator.pod.ensure_count()
 
         self.assertEqual(2, self.operator.pod.create.call_count)
-
-        self.operator.pod.ensure_count_len.assert_has_calls([
-            call(pod_len=2),
-            call(pod_len=3),
-        ])
 
     def test_pod_ensure_count_two_to_many(self):
         with open('{0}/test_pod_create.yaml'.format(self.data_path), 'r') as spec_yaml:
@@ -250,14 +284,14 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
 
         self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [pod1, pod2, pod3, pod4, pod5]
 
+
         self.operator.pod.delete = Mock()
-        self.operator.pod.ensure_count_len = Mock()
         self.operator.pod._delete_candidates = Mock()
         self.operator.pod._delete_candidates.side_effect = [
             [pod1, pod2, pod3, pod4, pod5],
             [pod1, pod2, pod3, pod4],
         ]
-        self.operator.pod.update_object_status = Mock()
+        self.operator.pod.operator_status_init = Mock()
 
         self.operator.pod.ensure_count()
 
@@ -266,11 +300,6 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             call(pod=pod4),
         ])
         self.assertEqual(2, self.operator.pod._delete_candidates.call_count)
-
-        self.operator.pod.ensure_count_len.assert_has_calls([
-            call(pod_len=4),
-            call(pod_len=3),
-        ])
 
     def test_pod_get_by_name(self):
         pod1 = self.create_pod_mock(1)
@@ -335,6 +364,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
 
     def test_pod_set_label_retry(self):
         pod1 = self.create_pod_mock(1)
+        self.operator.pod.wait = Mock()
         update_mock = Mock()
         update_mock.side_effect = [
             pykube.exceptions.HTTPError(code=500, message='some error'),
@@ -354,9 +384,11 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         update_mock.assert_called()
 
         self.assertEqual(pod1.labels['dummy_label'], 'dummy_value')
+        self.operator.pod.wait.assert_called_with(1)
 
     def test_pod_set_label_retry_exceeded(self):
         pod1 = self.create_pod_mock(1)
+        self.operator.pod.wait = Mock()
         update_mock = Mock()
         update_mock.side_effect = [
             pykube.exceptions.HTTPError(code=500, message='some error'),
@@ -375,4 +407,5 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             label_value='dummy_value'
 
         )
+        self.operator.pod.wait.assert_called_with(1)
 

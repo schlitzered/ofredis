@@ -1,7 +1,7 @@
 import datetime
 import os
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, PropertyMock
 
 import pykube
 
@@ -27,14 +27,13 @@ class TestRedisReplicationUnitBase(TestCase):
         pykube_rr_obj_patcher = patch('ofredis.rrbase.PyKubeRedisReplication', autospec=True)
         self.mock_pykube_rr_obj = pykube_rr_obj_patcher.start()
 
-        self.mock_stopped = Mock()
         self.mock_spec = dict()
         self.mock_logger = Mock()
         self.mock_name = 'dummy'
         self.mock_namespace = 'default'
 
         self.operator = ofredis.RedisReplicationController(
-            stopped=self.mock_stopped,
+            stopped=False,
             spec=self.mock_spec,
             logger=self.mock_logger,
             name=self.mock_name,

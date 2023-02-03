@@ -58,6 +58,9 @@ class RedisReplicationBase:
     def stopped(self):
         return self._stopped
 
+    def wait(self, timeout=10):
+        self.stopped.wait(timeout=timeout)
+
     def operator_status_update(self, key, value):
         self.operator_status.patch(
             {

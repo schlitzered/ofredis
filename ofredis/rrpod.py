@@ -31,7 +31,7 @@ class RedisReplicationPod(RedisReplicationBase):
 
     @property
     def pod_index(self):
-        return dict(self._pod_index)
+        return self._pod_index
 
     @property
     def pods(self):
@@ -108,16 +108,19 @@ class RedisReplicationPod(RedisReplicationBase):
             }
         }
 
-        # Make it our child: assign the namespace, name, labels, owner references, etc.
         kopf.adopt(pod_data)
         kopf.label(pod_data, {'RedisReplication': self.name})
 
-        # Actually create an object by requesting the Kubernetes API.
-        pykube.Pod(self.api, pod_data).create()
+        pod = pykube.Pod(self.api, pod_data)
+        pod.create()
+        self.wait_pod_is_ready(pod=pod)
+
+        return pod
 
     def delete(self, pod):
         self.log.info("{0} deleting pod".format(pod.name))
         pod.delete()
+        self.wait_pod_removed_from_index(pod=pod)
         self.log.info("{0} deleting pod, done".format(pod.name))
 
     def _delete_candidates(self):
@@ -142,21 +145,49 @@ class RedisReplicationPod(RedisReplicationBase):
             ))
             self.create()
             num_pods += 1
-            self.ensure_count_len(pod_len=num_pods)
         while num_pods > self.spec['replicas']:
             self.log.info("we have {0} of {1} replicas".format(
                 num_pods,
                 self.spec['replicas']
             ))
-            candidate = self._delete_candidates().pop()
-            self.delete(pod=candidate)
+            pod = self._delete_candidates().pop()
+            self.delete(pod=pod)
             num_pods -= 1
-            self.ensure_count_len(pod_len=num_pods)
 
-    def ensure_count_len(self, pod_len):
-        while len(self.pods) != pod_len:
-            self.log.info("internal pod count not yet matching with index, waiting")
-            self.stopped.wait(1)
+    def wait_pod_is_ready(self, pod):
+        self.log.info("{0} waiting for pod to be ready".format(pod.name))
+        while True:
+            try:
+                if self.is_ready(pod=pod):
+                    self.log.info("{0} waiting for pod to be ready, done".format(pod.name))
+                    return True
+            except RedisReplicationPodNotReady:
+                self.log.info("{0} waiting for pod to be ready".format(pod.name))
+            except RedisReplicationPodError:
+                self.log.info("{0} waiting for pod to be ready, failed".format(pod.name))
+                return
+            self.wait(1)
+            if self.stopped:
+                return
+            pod.reload()
+
+    def wait_pod_removed_from_index(self, pod):
+        self.log.info("waiting for pod to be removed from index")
+        self.wait(1)
+        while True:
+            pod_found = False
+            for _pod in self.pods:
+                if _pod.name == pod.name:
+                    pod_found = True
+                    break
+            if pod_found:
+                self.log.info(f"pod {pod.name} still in index, waiting")
+            else:
+                self.log.info("waiting for pod to be removed from index, done")
+                return
+            if self.stopped:
+                return
+            self.wait(1)
 
     def get_by_name(self, pod_name):
         for pod in self.pods:
@@ -194,7 +225,7 @@ class RedisReplicationPod(RedisReplicationBase):
                 self.log.warning(
                     "{0} could not update pod: {1}, retrying".format(pod.name, err)
                 )
-                self.stopped.wait(1)
+                self.wait(1)
                 retry -= 1
                 pod = self.get_by_name(pod_name=pod.name)
 

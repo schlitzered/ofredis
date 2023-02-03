@@ -189,6 +189,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_property_redis_operator_secrets_retry(self):
+        self.operator.redis.wait = Mock()
         mock_filter_get = Mock()
         mock_filter_get.get.side_effect = pykube.exceptions.ObjectDoesNotExist()
         self.mock_pykube_secret_objects.filter.return_value = mock_filter_get
@@ -229,6 +230,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
             secret_data
 
         )
+        self.operator.redis.wait.assert_called_with(10)
 
     def test_property_redis_connections(self):
         self.assertIsInstance(self.operator.redis.connections, dict)

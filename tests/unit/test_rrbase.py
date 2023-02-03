@@ -1,16 +1,6 @@
-import base64
-import hashlib
-import unittest.mock
-from unittest.mock import Mock, PropertyMock, call
-import uuid
-
-import pykube
-import pyredis.exceptions
-import yaml
+from unittest.mock import Mock
 
 from tests.unit.base import TestRedisReplicationUnitBase
-
-import ofredis
 
 
 class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
@@ -41,3 +31,25 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
     def test_property_spec(self):
         self.assertIsInstance(self.operator.spec, dict)
 
+    def test_operator_status_update(self):
+        self.operator.operator_status_update('foo', 'bar')
+        self.mock_pykube_rr_obj_instance.patch.assert_called_once_with(
+            {
+                "status": {
+                    "foo": "bar"
+                }
+            },
+            subresource='status'
+        )
+
+    def test_wait_timeout_1(self):
+        mock_stopped = Mock()
+        self.operator._stopped = mock_stopped
+        self.operator.wait(timeout=1)
+        mock_stopped.wait.assert_called_once_with(timeout=1)
+
+    def test_wait_timeout_default(self):
+        mock_stopped = Mock()
+        self.operator._stopped = mock_stopped
+        self.operator.wait()
+        mock_stopped.wait.assert_called_once_with(timeout=10)
