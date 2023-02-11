@@ -11,7 +11,9 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         self.mock_pykube_rr_obj.objects.return_value = self.mock_pykube_rr_obj_objects
 
         self.mock_pykube_rr_obj_instance = Mock()
-        self.mock_pykube_rr_obj_objects.get_by_name.return_value = self.mock_pykube_rr_obj_instance
+        self.mock_pykube_rr_obj_objects.get_by_name.return_value = (
+            self.mock_pykube_rr_obj_instance
+        )
 
     def test_property_api(self):
         self.assertIs(self.operator.api, self.mock_pykube_instance)
@@ -32,14 +34,9 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         self.assertIsInstance(self.operator.spec, dict)
 
     def test_operator_status_update(self):
-        self.operator.operator_status_update('foo', 'bar')
+        self.operator.operator_status_update("foo", "bar")
         self.mock_pykube_rr_obj_instance.patch.assert_called_once_with(
-            {
-                "status": {
-                    "foo": "bar"
-                }
-            },
-            subresource='status'
+            {"status": {"foo": "bar"}}, subresource="status"
         )
 
     def test_wait_timeout_1(self):

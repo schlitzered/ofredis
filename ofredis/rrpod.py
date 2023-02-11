@@ -12,13 +12,13 @@ from ofredis.exceptions import RedisReplicationErrorToManyPrimaries
 
 class RedisReplicationPod(RedisReplicationBase):
     def __init__(
-            self,
-            log: logging.Logger,
-            name: str,
-            namespace: str,
-            spec: dict,
-            stopped,
-            pod_index: dict
+        self,
+        log: logging.Logger,
+        name: str,
+        namespace: str,
+        spec: dict,
+        stopped,
+        pod_index: dict,
     ):
         self._pod_index = pod_index
         super().__init__(
@@ -26,7 +26,7 @@ class RedisReplicationPod(RedisReplicationBase):
             name=name,
             namespace=namespace,
             spec=spec,
-            stopped=stopped
+            stopped=stopped,
         )
 
     @property
@@ -36,7 +36,7 @@ class RedisReplicationPod(RedisReplicationBase):
     @property
     def pods(self):
         pods = list()
-        index_key = f'{self.namespace}_{self.name}'
+        index_key = f"{self.namespace}_{self.name}"
         for pod in self.pod_index.get(index_key, []):
             pods.append(pod)
         return pods
@@ -63,7 +63,7 @@ class RedisReplicationPod(RedisReplicationBase):
         pods = list()
         for pod in self.pods:
             try:
-                if pod.labels['RedisReplicationRole'] == 'Primary':
+                if pod.labels["RedisReplicationRole"] == "Primary":
                     pods.append(pod)
             except KeyError:
                 pass
@@ -74,7 +74,7 @@ class RedisReplicationPod(RedisReplicationBase):
         pods = list()
         for pod in self.pods:
             try:
-                if pod.labels['RedisReplicationRole'] == 'Secondary':
+                if pod.labels["RedisReplicationRole"] == "Secondary":
                     pods.append(pod)
             except KeyError:
                 pass
@@ -84,7 +84,7 @@ class RedisReplicationPod(RedisReplicationBase):
     def _pod_remove_deleted(pods):
         result = []
         for pod in pods:
-            if 'deletionTimestamp' not in pod.metadata:
+            if "deletionTimestamp" not in pod.metadata:
                 result.append(pod)
         return result
 
@@ -93,23 +93,19 @@ class RedisReplicationPod(RedisReplicationBase):
             "apiVersion": "v1",
             "kind": "Pod",
             "spec": {
-                "restartPolicy": 'Never',
+                "restartPolicy": "Never",
                 "containers": [
                     {
                         "name": self.name,
-                        "image": self.spec['redis']['image'],
-                        "ports": [
-                            {
-                                "containerPort": 6379
-                            }
-                        ]
+                        "image": self.spec["redis"]["image"],
+                        "ports": [{"containerPort": 6379}],
                     }
-                ]
-            }
+                ],
+            },
         }
 
         kopf.adopt(pod_data)
-        kopf.label(pod_data, {'RedisReplication': self.name})
+        kopf.label(pod_data, {"RedisReplication": self.name})
 
         pod = pykube.Pod(self.api, pod_data)
         pod.create()
@@ -127,7 +123,7 @@ class RedisReplicationPod(RedisReplicationBase):
         candidates = []
         self.log.info("trying to find unconfigured pod")
         for pod in self.pods:
-            if 'RedisReplicationRole' not in pod.labels:
+            if "RedisReplicationRole" not in pod.labels:
                 candidates.append(pod)
 
         if candidates:
@@ -138,18 +134,16 @@ class RedisReplicationPod(RedisReplicationBase):
 
     def ensure_count(self):
         num_pods = len(self.pods)
-        while num_pods < self.spec['replicas']:
-            self.log.info("we have {0} of {1} replicas".format(
-                num_pods,
-                self.spec['replicas']
-            ))
+        while num_pods < self.spec["replicas"]:
+            self.log.info(
+                "we have {0} of {1} replicas".format(num_pods, self.spec["replicas"])
+            )
             self.create()
             num_pods += 1
-        while num_pods > self.spec['replicas']:
-            self.log.info("we have {0} of {1} replicas".format(
-                num_pods,
-                self.spec['replicas']
-            ))
+        while num_pods > self.spec["replicas"]:
+            self.log.info(
+                "we have {0} of {1} replicas".format(num_pods, self.spec["replicas"])
+            )
             pod = self._delete_candidates().pop()
             self.delete(pod=pod)
             num_pods -= 1
@@ -159,12 +153,16 @@ class RedisReplicationPod(RedisReplicationBase):
         while True:
             try:
                 if self.is_ready(pod=pod):
-                    self.log.info("{0} waiting for pod to be ready, done".format(pod.name))
+                    self.log.info(
+                        "{0} waiting for pod to be ready, done".format(pod.name)
+                    )
                     return True
             except RedisReplicationPodNotReady:
                 self.log.info("{0} waiting for pod to be ready".format(pod.name))
             except RedisReplicationPodError:
-                self.log.info("{0} waiting for pod to be ready, failed".format(pod.name))
+                self.log.info(
+                    "{0} waiting for pod to be ready, failed".format(pod.name)
+                )
                 return
             self.wait(1)
             if self.stopped:
@@ -196,26 +194,32 @@ class RedisReplicationPod(RedisReplicationBase):
 
     def is_ready(self, pod):
         self.log.info("{0} checking if pod is running".format(pod.name))
-        self.log.info("{0} pod in {1} phase".format(
-            pod.name, pod.obj['status']['phase']
-        ))
-        if pod.obj['status']['phase'] == 'Running':
+        self.log.info(
+            "{0} pod in {1} phase".format(pod.name, pod.obj["status"]["phase"])
+        )
+        if pod.obj["status"]["phase"] == "Running":
             self.log.info("{0} pod is ready".format(pod.name))
             return pod
-        if pod.obj['status']['phase'] == 'Pending':
-            raise RedisReplicationPodNotReady('{0} pod not ready'.format(pod.name))
-        if pod.obj['status']['phase'] == 'Failed':
+        if pod.obj["status"]["phase"] == "Pending":
+            raise RedisReplicationPodNotReady("{0} pod not ready".format(pod.name))
+        if pod.obj["status"]["phase"] == "Failed":
             raise RedisReplicationPodError("{0} pod in error state".format(pod.name))
-        if pod.obj['status']['phase'] == 'Succeeded':
-            raise RedisReplicationPodError("{0} pod in succeeded state".format(pod.name))
-        if pod.obj['status']['phase'] == 'Unknown':
+        if pod.obj["status"]["phase"] == "Succeeded":
+            raise RedisReplicationPodError(
+                "{0} pod in succeeded state".format(pod.name)
+            )
+        if pod.obj["status"]["phase"] == "Unknown":
             raise RedisReplicationPodError("{0} pod in unknown state".format(pod.name))
-        raise RedisReplicationPodError("{0} pod in and unsupported state".format(pod.name))
+        raise RedisReplicationPodError(
+            "{0} pod in and unsupported state".format(pod.name)
+        )
 
     def set_label(self, pod, label_name, label_value, retry=3):
-        self.log.info("{0} setting label {1} with value {2} on pod".format(
-            pod.name, label_name, label_value
-        ))
+        self.log.info(
+            "{0} setting label {1} with value {2} on pod".format(
+                pod.name, label_name, label_value
+            )
+        )
         while retry > 0:
             try:
                 pod.labels[label_name] = str(label_value)

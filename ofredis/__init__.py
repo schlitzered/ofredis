@@ -21,15 +21,15 @@ async def configure(settings: kopf.OperatorSettings, **_):  # pragma: no cover
     settings.execution.max_workers = 10000
 
 
-@kopf.daemon('redis-replications')
+@kopf.daemon("redis-replications")
 def redis_monitor_daemon(
-        stopped,
-        logger,
-        spec,
-        name,
-        namespace,
-        pod_index,
-        **__
+    stopped,
+    logger,
+    spec,
+    name,
+    namespace,
+    pod_index,
+    **__,
 ):  # pragma: no cover
     redis_repl = RedisReplicationController(
         logger=logger,
@@ -37,8 +37,6 @@ def redis_monitor_daemon(
         namespace=namespace,
         spec=spec,
         stopped=stopped,
-        pod_index=pod_index
+        pod_index=pod_index,
     )
     redis_repl.run()
-
-

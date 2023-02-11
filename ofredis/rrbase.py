@@ -4,19 +4,19 @@ import pykube
 
 
 class PyKubeRedisReplication(pykube.objects.NamespacedAPIObject):
-    version = 'kopf.dev/v1'
-    endpoint = 'redis-replications'
-    kind = 'RedisReplication'
+    version = "kopf.dev/v1"
+    endpoint = "redis-replications"
+    kind = "RedisReplication"
 
 
 class RedisReplicationBase:
     def __init__(
-            self,
-            log: logging.Logger,
-            name: str,
-            namespace: str,
-            spec: dict,
-            stopped
+        self,
+        log: logging.Logger,
+        name: str,
+        namespace: str,
+        spec: dict,
+        stopped,
     ):
         self._api = None
         self._log = log
@@ -46,8 +46,7 @@ class RedisReplicationBase:
     @property
     def operator_status(self):
         return PyKubeRedisReplication.objects(
-            self.api,
-            namespace=self.namespace
+            self.api, namespace=self.namespace
         ).get_by_name(self.name)
 
     @property
@@ -62,11 +61,4 @@ class RedisReplicationBase:
         self.stopped.wait(timeout=timeout)
 
     def operator_status_update(self, key, value):
-        self.operator_status.patch(
-            {
-                "status": {
-                    key: value
-                }
-            },
-            subresource='status'
-        )
+        self.operator_status.patch({"status": {key: value}}, subresource="status")

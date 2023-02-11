@@ -9,7 +9,6 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
         self.operator.operator_status_update = operator_status_update
 
         self.operator.operator_status_init()
-        operator_status_update.assert_has_calls([
-            call(key="master", value='None'),
-            call(key="replicas", value=0)
-        ])
+        operator_status_update.assert_has_calls(
+            [call(key="master", value="None"), call(key="replicas", value=0)]
+        )
