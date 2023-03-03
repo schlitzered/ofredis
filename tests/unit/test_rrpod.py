@@ -425,3 +425,87 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             label_value="dummy_value",
         )
         self.operator.pod.wait.assert_called_with(1)
+
+    def test_wait_pod_is_ready(self):
+        pod1 = self.create_pod_mock(1)
+
+        is_ready = Mock()
+        is_ready.side_effect = [
+            ofredis.exceptions.RedisReplicationPodNotReady,
+            True
+
+        ]
+        self.operator.pod.is_ready = is_ready
+
+        wait = Mock()
+        self.operator.pod.wait = wait
+
+        self.operator.pod.wait_pod_is_ready(pod=pod1)
+        is_ready.assert_has_calls([call(pod=pod1), call(pod=pod1)])
+        wait.assert_called_with(1)
+        pod1.reload.assert_called()
+
+    def test_wait_pod_is_ready_pod_error(self):
+        pod1 = self.create_pod_mock(1)
+
+        is_ready = Mock()
+        is_ready.side_effect = [
+            ofredis.exceptions.RedisReplicationPodError
+
+        ]
+        self.operator.pod.is_ready = is_ready
+
+        self.operator.pod.wait_pod_is_ready(pod=pod1)
+        is_ready.assert_has_calls([call(pod=pod1)])
+
+    def test_wait_pod_is_ready_stopped(self):
+        pod1 = self.create_pod_mock(1)
+
+        is_ready = Mock()
+        is_ready.side_effect = [
+            ofredis.exceptions.RedisReplicationPodNotReady,
+            True
+
+        ]
+        self.operator.pod.is_ready = is_ready
+
+        wait = Mock()
+        self.operator.pod.wait = wait
+
+        self.operator.pod._stopped = True
+
+        self.operator.pod.wait_pod_is_ready(pod=pod1)
+        is_ready.assert_has_calls([call(pod=pod1)])
+        wait.assert_called_with(1)
+
+    def test_wait_pod_removed_from_index(self):
+        pod1 = self.create_pod_mock(1)
+
+        pod_index = Mock()
+        pod_index.get.side_effect = [
+            [pod1],
+            [],
+        ]
+        self.operator.pod._pod_index = pod_index
+
+        wait = Mock()
+        self.operator.pod.wait = wait
+
+        self.operator.pod.wait_pod_removed_from_index(pod=pod1)
+
+    def test_wait_pod_removed_from_index_stopped(self):
+        pod1 = self.create_pod_mock(1)
+
+        pod_index = Mock()
+        pod_index.get.side_effect = [
+            [pod1],
+            [],
+        ]
+        self.operator.pod._pod_index = pod_index
+
+        wait = Mock()
+        self.operator.pod.wait = wait
+
+        self.operator.pod._stopped = True
+
+        self.operator.pod.wait_pod_removed_from_index(pod=pod1)

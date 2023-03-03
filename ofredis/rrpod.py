@@ -183,9 +183,9 @@ class RedisReplicationPod(RedisReplicationBase):
             else:
                 self.log.info("waiting for pod to be removed from index, done")
                 return
+            self.wait(1)
             if self.stopped:
                 return
-            self.wait(1)
 
     def get_by_name(self, pod_name):
         for pod in self.pods:
