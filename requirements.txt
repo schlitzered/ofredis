@@ -1,6 +1,4 @@
 python-dateutil~=2.8.2
-kopf~=1.35.3
+kopf==1.36.0
 pykube-ng
-python-redis
 PyYAML~=6.0
-setuptools~=57.0.0
