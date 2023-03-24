@@ -47,7 +47,7 @@ class RedisReplicationController(RedisReplicationBase):
         return self._redis
 
     def operator_status_init(self):
-        primary_name = str(self.pod.primary_name)
+        primary_name = str(self.pod.pod_primary_name)
         num_pods = len(self.pod.pods)
         self.log.info(
             f"initializing operator status with master {primary_name} and {num_pods} replicas"

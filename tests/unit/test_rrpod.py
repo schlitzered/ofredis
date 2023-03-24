@@ -65,7 +65,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             pod2,
         ]
 
-        self.assertEqual(self.operator.pod.primaries, [pod1])
+        self.assertEqual(self.operator.pod.pod_primaries, [pod1])
 
     def test_property_pod_primaries_missing_label(self):
         pod1 = self.create_pod_mock(1)
@@ -82,18 +82,18 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             pod3,
         ]
 
-        self.assertEqual(self.operator.pod.primaries, [pod1])
+        self.assertEqual(self.operator.pod.pod_primaries, [pod1])
 
     def test_property_pod_primary_zero(self):
         self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = []
-        self.assertIsNone(self.operator.pod.primary)
+        self.assertIsNone(self.operator.pod.pod_primary)
 
     def test_property_pod_primary_one(self):
         pod1 = self.create_pod_mock(1)
         pod1.labels = {"RedisReplicationRole": "Primary"}
 
         self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [pod1]
-        self.assertEqual(self.operator.pod.primary, pod1)
+        self.assertEqual(self.operator.pod.pod_primary, pod1)
 
     def test_property_pod_primary_many(self):
         pod1 = self.create_pod_mock(count=1)
@@ -107,7 +107,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         ]
 
         def wrap_property():
-            return self.operator.pod.primary
+            return self.operator.pod.pod_primary
 
         self.assertRaises(RedisReplicationErrorToManyPrimaries, wrap_property)
 
@@ -115,11 +115,11 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         pod1 = self.create_pod_mock(count=1)
         pod1.labels = {"RedisReplicationRole": "Primary"}
         self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [pod1]
-        self.assertEqual(self.operator.pod.primary_name, "dummy_pod1")
+        self.assertEqual(self.operator.pod.pod_primary_name, "dummy_pod1")
 
     def test_property_pod_primary_name_none(self):
         self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = []
-        self.assertIsNone(self.operator.pod.primary_name)
+        self.assertIsNone(self.operator.pod.pod_primary_name)
 
     def test_property_pod_secondaries(self):
         pod1 = self.create_pod_mock(1)
@@ -133,7 +133,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             pod2,
         ]
 
-        self.assertEqual(self.operator.pod.secondaries, [pod2])
+        self.assertEqual(self.operator.pod.pod_secondaries, [pod2])
 
     def test_property_pod_secondaries_missing_label(self):
         pod1 = self.create_pod_mock(1)
@@ -150,7 +150,71 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             pod3,
         ]
 
-        self.assertEqual(self.operator.pod.secondaries, [pod2])
+        self.assertEqual(self.operator.pod.pod_secondaries, [pod2])
+
+    def test_property_pod_configured(self):
+        pod1 = self.create_pod_mock(1)
+        pod2 = self.create_pod_mock(3)
+        pod2.labels["RedisReplicationRole"] = "Primary"
+        pod3 = self.create_pod_mock(3)
+        pod3.labels["RedisReplicationRole"] = "Secondary"
+        pod4 = self.create_pod_mock(4)
+        pod4.labels["RedisReplicationRole"] = "Secondary"
+        pod4.metadata["deletionTimestamp"] = "2020-01-01T00:00:00Z"
+
+        self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [
+            pod1,
+            pod2,
+            pod3,
+            pod4
+        ]
+
+        candidates = self.operator.pod.pod_configured
+        self.assertEqual(candidates, [pod2, pod3])
+
+    def test_property_pod_unconfigured(self):
+        pod1 = self.create_pod_mock(1)
+        pod2 = self.create_pod_mock(3)
+        pod2.labels["RedisReplicationRole"] = "Primary"
+        pod3 = self.create_pod_mock(3)
+        pod3.labels["RedisReplicationRole"] = "Secondary"
+        pod4 = self.create_pod_mock(4)
+        pod4.metadata["deletionTimestamp"] = "2020-01-01T00:00:00Z"
+
+        self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [
+            pod1,
+            pod2,
+            pod3,
+            pod4
+        ]
+
+        candidates = self.operator.pod.pod_unconfigured
+        self.assertEqual(candidates, [pod1])
+
+    def test_property_pod_outdated(self):
+        pod1 = self.create_pod_mock(1)
+        pod1.labels["RedisReplicationRole"] = "Primary"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+        pod2 = self.create_pod_mock(3)
+        pod2.labels["RedisReplicationRole"] = "Secondary"
+        pod2.labels["RedisReplicationTemplateHash"] = "1233"
+        pod3 = self.create_pod_mock(3)
+        pod3.labels["RedisReplicationRole"] = "Secondary"
+        pod4 = self.create_pod_mock(4)
+        pod4.metadata["deletionTimestamp"] = "2020-01-01T00:00:00Z"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+
+        self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [
+            pod1,
+            pod2,
+            pod3,
+            pod4
+        ]
+
+        self.operator.pod._pod_template_hash = "1234"
+
+        candidates = self.operator.pod.pod_outdated
+        self.assertEqual(candidates, [pod2, pod3])
 
     def test_pod_create(self):
         with open("{0}/test_pod_create.yaml".format(self.data_path), "r") as spec_yaml:
@@ -172,6 +236,8 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             },
         }
 
+        self.operator.pod._pod_template_hash = "1234"
+
         mock_create = Mock()
         self.mock_pykube.Pod.return_value = mock_create
 
@@ -180,9 +246,10 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         self.operator.pod.create()
 
         self.mock_kopf.adopt.assert_called_with(pod_data)
-        self.mock_kopf.label.assert_called_with(
-            pod_data, {"RedisReplication": self.operator.name}
-        )
+        self.mock_kopf.label.assert_has_calls([
+            call(pod_data, {"RedisReplication": self.operator.name}),
+            call(pod_data, {"RedisReplicationTemplateHash": "1234"}),
+        ])
 
         self.mock_pykube.Pod.assert_called_with(self.operator.api, pod_data)
 
@@ -211,7 +278,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             pod3,
         ]
 
-        candidates = self.operator.pod._delete_candidates()
+        candidates = self.operator.pod.pod_delete_candidates
         self.assertEqual(candidates, [pod1, pod2])
 
     def test_pod_delete_candidates_secondaries(self):
@@ -230,7 +297,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             pod3,
         ]
 
-        candidates = self.operator.pod._delete_candidates()
+        candidates = self.operator.pod.pod_delete_candidates
         self.assertEqual(candidates, [pod1, pod2, pod3])
 
     def test_pod_ensure_count_nothing_todo(self):
@@ -254,6 +321,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
 
         self.operator.pod.create = Mock()
         self.operator.pod.delete = Mock()
+        self.operator.pod.handle_outdated = Mock()
         self.operator.pod.operator_status_init = Mock()
 
         self.assertFalse(self.operator.pod.ensure_count())
@@ -261,6 +329,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         self.assertFalse(self.operator.pod.create.called)
         self.assertFalse(self.operator.pod.delete.called)
         self.assertFalse(self.operator.pod.operator_status_init.called)
+        self.assertTrue(self.operator.pod.handle_outdated.called)
 
     def test_pod_ensure_count_two_missing(self):
         with open("{0}/test_pod_create.yaml".format(self.data_path), "r") as spec_yaml:
@@ -273,10 +342,12 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
 
         self.operator.pod.create = Mock()
         self.operator.pod.wait = Mock()
+        self.operator.pod.handle_outdated = Mock()
 
         self.operator.pod.ensure_count()
 
         self.assertEqual(2, self.operator.pod.create.call_count)
+        self.assertTrue(self.operator.pod.handle_outdated.called)
 
     def test_pod_ensure_count_two_to_many(self):
         with open("{0}/test_pod_create.yaml".format(self.data_path), "r") as spec_yaml:
@@ -306,12 +377,13 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         ]
 
         self.operator.pod.delete = Mock()
-        self.operator.pod._delete_candidates = Mock()
-        self.operator.pod._delete_candidates.side_effect = [
+        pod_delete_candidates = type(self.operator.pod).pod_delete_candidates = PropertyMock()
+        pod_delete_candidates.side_effect = [
             [pod1, pod2, pod3, pod4, pod5],
             [pod1, pod2, pod3, pod4],
         ]
         self.operator.pod.operator_status_init = Mock()
+        self.operator.pod.handle_outdated = Mock()
 
         self.operator.pod.ensure_count()
 
@@ -321,7 +393,100 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
                 call(pod=pod4),
             ]
         )
-        self.assertEqual(2, self.operator.pod._delete_candidates.call_count)
+        self.assertEqual(2, pod_delete_candidates.call_count)
+        self.assertTrue(self.operator.pod.handle_outdated.called)
+
+    def test_handle_outdated(self):
+        pod1 = self.create_pod_mock(1)
+        pod1.labels["RedisReplicationRole"] = "Primary"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+        pod2 = self.create_pod_mock(3)
+        pod2.labels["RedisReplicationRole"] = "Secondary"
+        pod2.labels["RedisReplicationTemplateHash"] = "1233"
+        pod3 = self.create_pod_mock(3)
+        pod3.labels["RedisReplicationRole"] = "Secondary"
+        pod4 = self.create_pod_mock(4)
+        pod4.metadata["deletionTimestamp"] = "2020-01-01T00:00:00Z"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+
+        self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [
+            pod1,
+            pod2,
+            pod3,
+            pod4
+        ]
+
+        self.operator.pod._spec = {"replicas": 3}
+        self.operator.pod._pod_template_hash = "1234"
+        self.operator.pod.create = Mock()
+        self.operator.pod.delete = Mock()
+
+        self.operator.pod.handle_outdated()
+
+        self.operator.pod.delete.assert_called_once_with(pod=pod3)
+        self.operator.pod.create.assert_called_once()
+
+    def test_handle_outdated_no_outdated(self):
+        pod1 = self.create_pod_mock(1)
+        pod1.labels["RedisReplicationRole"] = "Primary"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+        pod2 = self.create_pod_mock(3)
+        pod2.labels["RedisReplicationRole"] = "Secondary"
+        pod2.labels["RedisReplicationTemplateHash"] = "1234"
+        pod3 = self.create_pod_mock(3)
+        pod3.labels["RedisReplicationRole"] = "Secondary"
+        pod3.labels["RedisReplicationTemplateHash"] = "1234"
+        pod4 = self.create_pod_mock(4)
+        pod4.metadata["deletionTimestamp"] = "2020-01-01T00:00:00Z"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+
+        self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [
+            pod1,
+            pod2,
+            pod3,
+            pod4
+        ]
+
+        self.operator.pod._spec = {"replicas": 3}
+        self.operator.pod._pod_template_hash = "1234"
+        self.operator.pod.create = Mock()
+        self.operator.pod.delete = Mock()
+
+        self.operator.pod.handle_outdated()
+
+        self.operator.pod.delete.assert_not_called()
+        self.operator.pod.create.assert_not_called()
+
+    def test_handle_outdated_configured_mismatch(self):
+        pod1 = self.create_pod_mock(1)
+        pod1.labels["RedisReplicationRole"] = "Primary"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+        pod2 = self.create_pod_mock(3)
+        pod2.labels["RedisReplicationRole"] = "Secondary"
+        pod2.labels["RedisReplicationTemplateHash"] = "1234"
+        pod3 = self.create_pod_mock(3)
+        pod3.labels["RedisReplicationRole"] = "Secondary"
+        pod3.labels["RedisReplicationTemplateHash"] = "1234"
+        pod4 = self.create_pod_mock(4)
+        pod4.metadata["deletionTimestamp"] = "2020-01-01T00:00:00Z"
+        pod1.labels["RedisReplicationTemplateHash"] = "1234"
+
+        self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [
+            pod1,
+            pod2,
+            pod3,
+            pod4
+        ]
+
+        self.operator.pod._spec = {"replicas": 4}
+        self.operator.pod._pod_template_hash = "1234"
+        self.operator.pod.create = Mock()
+        self.operator.pod.delete = Mock()
+
+        self.operator.pod.handle_outdated()
+
+        self.operator.pod.delete.assert_not_called()
+        self.operator.pod.create.assert_not_called()
 
     def test_pod_get_by_name(self):
         pod1 = self.create_pod_mock(1)
@@ -509,3 +674,45 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         self.operator.pod._stopped = True
 
         self.operator.pod.wait_pod_removed_from_index(pod=pod1)
+
+    def test_property_pod_template_hash(self):
+        self.operator.pod._pod_template = {
+            "key1": "value1",
+            "kex2": {
+                "subkey1": 1,
+                "subkey2": [1, 2, "dummy"]
+            }
+        }
+
+        self.assertEqual(
+            self.operator.pod.pod_template_hash,
+            "e2e901eb048ffb0063f31153f342d5dd7dae50a4"
+        )
+
+    def test_property_pod_template(self):
+        pod_template = {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "spec": {
+                "restartPolicy": "Never",
+                "containers": [
+                    {
+                        "name": "dummy",
+                        "image": "dummy_image",
+                        "ports": [{"containerPort": 6379}],
+                    }
+                ],
+            },
+        }
+
+        self.operator.pod._spec = {
+            "redis": {
+                "image": "dummy_image",
+            }
+        }
+
+        self.assertEqual(
+            self.operator.pod.pod_template,
+            pod_template
+        )
+

@@ -1333,7 +1333,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.assertEqual(self.operator.redis.primary_get_candidate(), dummy_pod3)
 
     def test_primary_enforce_primary_present(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = True
 
         self.operator.redis.primary_promote = Mock()
@@ -1345,7 +1345,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.primary_promote.assert_not_called()
 
     def test_primary_enforce_primary_present_no_candidate(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = None
         self.operator.redis.primary_get_candidate = Mock()
         self.operator.redis.primary_get_candidate.return_value = None
@@ -1358,7 +1358,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.primary_promote.assert_not_called()
 
     def test_primary_enforce_no_primary(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = None
 
         dummy_pod1 = self.create_pod_mock(count=1)
@@ -1371,7 +1371,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.primary_promote.assert_called_once_with(pod=dummy_pod1)
 
     def test_primary_enforce_no_primary_present_candidate_not_ready(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = None
 
         dummy_pod1 = self.create_pod_mock(count=1)
@@ -1386,7 +1386,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.primary_enforce()
 
     def test_primary_enforce_no_primary_present_redis_conn_error(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = None
 
         dummy_pod1 = self.create_pod_mock(count=1)
@@ -1408,7 +1408,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.assertNotIn(dummy_pod1.name, self.operator.redis.connections)
 
     def test_primary_enforce_no_primary_present_candidate_pod_error(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = None
 
         dummy_pod1 = self.create_pod_mock(count=1)
@@ -1468,7 +1468,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.pod.set_label.assert_not_called()
 
     def test_secondary_enforce_no_primary(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = None
 
         dummy_pod1 = self.create_pod_mock(count=1)
@@ -1476,14 +1476,14 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.secondary_enforce(pod=dummy_pod1)
 
     def test_secondary_enforce_with_primary_eq_pod(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         primary_pod = self.create_pod_mock(count=1)
         pod_primary_mock.return_value = primary_pod
 
         self.operator.redis.secondary_enforce(pod=primary_pod)
 
     def test_secondary_enforce_with_primary_ip_not_ready(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         primary_pod = self.create_pod_mock(count=1)
         del primary_pod.obj["status"]["podIP"]
         pod_primary_mock.return_value = primary_pod
@@ -1493,7 +1493,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.secondary_enforce(pod=dummy_pod1)
 
     def test_secondary_enforce_with_primary_already_configured(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = self.create_pod_mock(count=1)
 
         dummy_pod1 = self.create_pod_mock(count=2)
@@ -1518,7 +1518,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
     def test_secondary_enforce_redis_exception(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = self.create_pod_mock(count=1)
 
         dummy_pod1 = self.create_pod_mock(count=2)
@@ -1539,7 +1539,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
             self.operator.redis.secondary_enforce(pod=dummy_pod1)
 
     def test_secondary_enforce(self):
-        pod_primary_mock = type(self.operator.pod).primary = PropertyMock()
+        pod_primary_mock = type(self.operator.pod).pod_primary = PropertyMock()
         pod_primary_mock.return_value = self.create_pod_mock(count=1)
 
         dummy_pod1 = self.create_pod_mock(count=2)
@@ -1584,7 +1584,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
                 ),
                 call(
                     "REPLICAOF",
-                    self.operator.pod.primary.obj["status"]["podIP"],
+                    self.operator.pod.pod_primary.obj["status"]["podIP"],
                     "6379",
                 ),
             ]

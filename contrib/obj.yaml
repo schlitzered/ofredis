@@ -33,6 +33,6 @@ spec:
   config:
     maxmemory: 512mb
     save: ''
-  replicas: 8
+  replicas: 3
   redis:
-    image: redis
+    image: redis:7.0.10

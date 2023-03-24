@@ -601,7 +601,7 @@ class RedisReplicationRedis(RedisReplicationBase):
             self.connections.pop(pod_name)
 
     def primary_enforce(self):
-        primary = self.pod.primary
+        primary = self.pod.pod_primary
         if primary:
             return
         self.log.info("no primary present")
@@ -654,8 +654,8 @@ class RedisReplicationRedis(RedisReplicationBase):
             raise RedisReplicationRedisConnError(err) from err
 
     def secondary_enforce(self, pod):
-        primary = self.pod.primary
-        primary_name = self.pod.primary_name
+        primary = self.pod.pod_primary
+        primary_name = self.pod.pod_primary_name
         if not primary:
             self.log.warning(
                 "{0} no primary detected, skipping secondary enforcement".format(
