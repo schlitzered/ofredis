@@ -73,7 +73,10 @@ class RedisReplicationPod(RedisReplicationBase):
 
     @property
     def pods(self):
-        return self.pod_index.get(f"{self.namespace}_{self.name}", [])
+        pods = list()
+        for pod in self.pod_index.get(f"{self.namespace}_{self.name}", []):
+            pods.append(pod)
+        return pods
 
     @property
     def pod_outdated(self):
