@@ -4,7 +4,8 @@ kind: RedisReplication
 metadata:
   name: rrk-blarg
   labels:
-    somelabel: somevalue
+    somelabel1: somevalue1
+    somelabel2: somevalue2
   annotations:
     someannotation: somevalue
 spec:
@@ -31,8 +32,45 @@ spec:
           secretDataKey: admin_password
       userEnable: true
   config:
-    maxmemory: 512mb
+    maxmemory: 64mb
     save: ''
   replicas: 3
+  annotations:
+    blarg: blub
+    blarg1: blub1
+  initContainers:
+    - name: init-myservice
+      image: busybox:1.28
+      command: ['sh', '-c', 'echo "The app is running!"']
+      resources:
+        limits:
+          cpu: 0.2
+        requests:
+          cpu: 0.1
+  sideCarContainers:
+    - image: almalinux:9
+      name: centos
+      command: ['sleep', '36000000']
+      resources:
+        limits:
+          cpu: 0.2
+        requests:
+          cpu: 0.1
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                  - linux
   redis:
+    resources:
+      limits:
+        cpu: 100m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
     image: redis:7.0.10

@@ -56,25 +56,27 @@ spec:
               affinity:
                 description: Pod affinity
                 type: object
+                x-kubernetes-preserve-unknown-fields: true
               annotations:
-                additionalProperties:
-                  type: string
                 description: Pod annotations
                 type: object
+                x-kubernetes-preserve-unknown-fields: true
               config:
                 additionalProperties:
                   type: string
                 description: 'custom redis settings, some settings will be filtered, since they are manged by the operator, check source for redis_config_params_filter'
                 type: object
               imagePullSecrets:
-                description: 'Pod ImagePullSecrets More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod'
+                description: 'Pod ImagePullSecrets More info: 
                 items:
                   type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 type: array
               initContainers:
                 description: Pod initContainers
                 items:
                   type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 type: array
               acls:
                 additionalProperties:
@@ -128,10 +130,13 @@ spec:
                   resources:
                     description: Resources describes the compute resource requirements
                     type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   securityContext:
                     description: SecurityContext holds security configuration that will
                       be applied to a container
                     type: object
+                    additionalProperties: true
+                    x-kubernetes-preserve-unknown-fields: true
                 required:
                   - image
                 type: object
@@ -143,6 +148,8 @@ spec:
               securityContext:
                 description: Pod securityContext
                 type: object
+                additionalProperties: true
+                x-kubernetes-preserve-unknown-fields: true
               serviceAccountName:
                 description: 'Pod ServiceAccountName is the name of the ServiceAccount
                   to use to run this pod. More info: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/'
@@ -151,6 +158,7 @@ spec:
                 description: Pod initContainers
                 items:
                   type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 type: array
               nodeSelector:
                 additionalProperties:
@@ -163,6 +171,7 @@ spec:
                 description: Pod tolerations
                 items:
                   type: object
+                  x-kubernetes-preserve-unknown-fields: true
                 type: array
             required:
               - replicas

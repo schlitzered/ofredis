@@ -43,6 +43,7 @@ class RedisReplicationPod(RedisReplicationBase):
             self._pod_template = {
                 "apiVersion": "v1",
                 "kind": "Pod",
+                "metadata": {},
                 "spec": {
                     "restartPolicy": "Never",
                     "containers": [
@@ -54,6 +55,47 @@ class RedisReplicationPod(RedisReplicationBase):
                     ],
                 },
             }
+            if 'resources' in self.spec["redis"]:
+                self._pod_template["spec"]["containers"][0][
+                    "resources"
+                ] = self.spec["redis"]["resources"]
+            if "securityContext" in self.spec["redis"]:
+                self._pod_template["spec"]["containers"][0][
+                    "securityContext"
+                ] = self.spec["redis"]["securityContext"]
+            if "affinity" in self.spec:
+                self._pod_template["spec"]["affinity"] = self.spec["affinity"]
+            if "annotations" in self.spec:
+                self._pod_template["metadata"]["annotations"] = self.spec["annotations"]
+            if "imagePullSecrets" in self.spec:
+                self._pod_template["spec"]["imagePullSecrets"] = self.spec[
+                    "imagePullSecrets"
+                ]
+            if "initContainers" in self.spec:
+                self._pod_template["spec"]["initContainers"] = self.spec[
+                    "initContainers"
+                ]
+            if "labels" in self.spec:
+                self._pod_template["metadata"]["labels"] = self.spec["labels"]
+            if "priorityClassName" in self.spec:
+                self._pod_template["spec"]["priorityClassName"] = self.spec[
+                    "priorityClassName"
+                ]
+            if "securityContext" in self.spec:
+                self._pod_template["spec"]["securityContext"] = self.spec[
+                    "securityContext"
+                ]
+            if "serviceAccountName" in self.spec:
+                self._pod_template["spec"]["serviceAccountName"] = self.spec[
+                    "serviceAccountName"
+                ]
+            if "sideCarContainers" in self.spec:
+                for container in self.spec["sideCarContainers"]:
+                    self._pod_template["spec"]["containers"].append(container)
+            if "nodeSelector" in self.spec:
+                self._pod_template["spec"]["nodeSelector"] = self.spec["nodeSelector"]
+            if "tolerations" in self.spec:
+                self._pod_template["spec"]["tolerations"] = self.spec["tolerations"]
         return self._pod_template
 
     @pod_template.deleter
@@ -64,7 +106,9 @@ class RedisReplicationPod(RedisReplicationBase):
     def pod_template_hash(self):
         if not self._pod_template_hash:
             pod_template_str = json.dumps(self.pod_template, sort_keys=True)
-            self._pod_template_hash = hashlib.sha1(pod_template_str.encode("utf-8")).hexdigest()
+            self._pod_template_hash = hashlib.sha1(
+                pod_template_str.encode("utf-8")
+            ).hexdigest()
         return self._pod_template_hash
 
     @pod_template_hash.deleter
@@ -82,7 +126,10 @@ class RedisReplicationPod(RedisReplicationBase):
     def pod_outdated(self):
         pods = list()
         for pod in self.pods:
-            if pod.labels.get("RedisReplicationTemplateHash", "") != self.pod_template_hash:
+            if (
+                pod.labels.get("RedisReplicationTemplateHash", "")
+                != self.pod_template_hash
+            ):
                 pods.append(pod)
         return self._pod_remove_deleted(pods=pods)
 
@@ -200,7 +247,9 @@ class RedisReplicationPod(RedisReplicationBase):
 
     def handle_outdated(self):
         if len(self.pod_configured) != self.spec["replicas"]:
-            self.log.info("spec replicas not matching number of configured pods, skipping outdated pods")
+            self.log.info(
+                "spec replicas not matching number of configured pods, skipping outdated pods"
+            )
             return
         if not self.pod_outdated:
             return

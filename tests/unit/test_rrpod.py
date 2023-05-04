@@ -12,6 +12,7 @@ from ofredis import RedisReplicationErrorToManyPrimaries
 class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
     def setUp(self):
         super().setUp()
+        self.maxDiff = None
 
         kopf_patcher = patch("ofredis.rrpod.kopf", autospec=True)
         self.mock_kopf = kopf_patcher.start()
@@ -224,6 +225,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         pod_data = {
             "apiVersion": "v1",
             "kind": "Pod",
+            "metadata": {},
             "spec": {
                 "restartPolicy": "Never",
                 "containers": [
@@ -693,6 +695,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         pod_template = {
             "apiVersion": "v1",
             "kind": "Pod",
+            "metadata": {},
             "spec": {
                 "restartPolicy": "Never",
                 "containers": [
@@ -709,6 +712,179 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
             "redis": {
                 "image": "dummy_image",
             }
+        }
+
+        self.assertEqual(
+            self.operator.pod.pod_template,
+            pod_template
+        )
+
+    def test_property_pod_template_all_pod_settings(self):
+        pod_template = {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "dummy": "dummy"
+                },
+                "labels": {
+                    "dummy": "dummy"
+                },
+            },
+            "spec": {
+                "restartPolicy": "Never",
+                "affinity": {
+                    "podAntiAffinity": {
+                        "requiredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "labelSelector": {
+                                    "matchExpressions": [
+                                        {
+                                            "key": "app",
+                                            "operator": "In",
+                                            "values": ["redis"]
+                                        }
+                                    ]
+                                },
+                            }
+                        ]
+                    }
+                },
+                "containers": [
+                    {
+                        "name": "dummy",
+                        "image": "dummy_image",
+                        "ports": [{"containerPort": 6379}],
+                        "resources": {
+                            "limits": {
+                                "cpu": "200m",
+                                "memory": "256Mi"
+                            },
+                            "requests": {
+                                "cpu": "100m",
+                                "memory": "128Mi"
+                            }
+                        },
+                        "securityContext": {
+                            "runAsUser": 1000,
+                            "runAsGroup": 1000,
+                            "fsGroup": 1000
+                        },
+                    },
+                    {
+                        "name": "dummy",
+                        "image": "dummy_image",
+                    }
+                ],
+                "imagePullSecrets": [
+                    {
+                        "name": "dummy"
+                    }
+                ],
+                "initContainers": [
+                    {
+                        "name": "dummy",
+                        "image": "dummy_image",
+                    }
+                ],
+                "priorityClassName": "dummy",
+                "securityContext": {
+                    "runAsUser": 1000,
+                    "runAsGroup": 1000,
+                    "fsGroup": 1000
+                },
+                "serviceAccountName": "dummy",
+                "nodeSelector": {
+                    "dummy": "dummy"
+                },
+                "tolerations": [
+                    {
+                        "key": "dummy",
+                        "operator": "Equal",
+                        "value": "dummy",
+                        "effect": "NoSchedule"
+                    }
+                ],
+            }
+        }
+
+        self.operator.pod._spec = {
+            "redis": {
+                "image": "dummy_image",
+                "resources": {
+                    "limits": {
+                        "cpu": "200m",
+                        "memory": "256Mi"
+                    },
+                    "requests": {
+                        "cpu": "100m",
+                        "memory": "128Mi"
+                    }
+                },
+                "securityContext": {
+                    "runAsUser": 1000,
+                    "runAsGroup": 1000,
+                    "fsGroup": 1000
+                },
+            },
+            "affinity": {
+                "podAntiAffinity": {
+                    "requiredDuringSchedulingIgnoredDuringExecution": [
+                        {
+                            "labelSelector": {
+                                "matchExpressions": [
+                                    {
+                                        "key": "app",
+                                        "operator": "In",
+                                        "values": ["redis"]
+                                    }
+                                ]
+                            },
+                        }
+                    ]
+                }
+            },
+            "annotations": {
+                "dummy": "dummy"
+            },
+            "imagePullSecrets": [
+                {
+                    "name": "dummy"
+                }
+            ],
+            "initContainers": [
+                {
+                    "name": "dummy",
+                    "image": "dummy_image",
+                }
+            ],
+            "labels": {
+                "dummy": "dummy"
+            },
+            "priorityClassName": "dummy",
+            "securityContext": {
+                "runAsUser": 1000,
+                "runAsGroup": 1000,
+                "fsGroup": 1000
+            },
+            "serviceAccountName": "dummy",
+            "sideCarContainers": [
+                {
+                    "name": "dummy",
+                    "image": "dummy_image",
+                }
+            ],
+            "nodeSelector": {
+                "dummy": "dummy"
+            },
+            "tolerations": [
+                {
+                    "key": "dummy",
+                    "operator": "Equal",
+                    "value": "dummy",
+                    "effect": "NoSchedule"
+                }
+            ],
         }
 
         self.assertEqual(
