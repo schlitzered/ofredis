@@ -29,6 +29,7 @@ class TestRedisReplicationUnitBase(TestCase):
         )
         self.mock_pykube_rr_obj = pykube_rr_obj_patcher.start()
 
+        self.mock_meta = dict()
         self.mock_spec = dict()
         self.mock_logger = Mock()
         self.mock_name = "dummy"
@@ -36,6 +37,7 @@ class TestRedisReplicationUnitBase(TestCase):
 
         self.operator = ofredis.RedisReplicationController(
             stopped=False,
+            meta=self.mock_meta,
             spec=self.mock_spec,
             logger=self.mock_logger,
             name=self.mock_name,

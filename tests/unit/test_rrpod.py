@@ -6,7 +6,7 @@ import yaml
 from tests.unit.base import TestRedisReplicationUnitBase
 
 import ofredis
-from ofredis import RedisReplicationErrorToManyPrimaries
+import ofredis.exceptions
 
 
 class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
@@ -110,7 +110,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         def wrap_property():
             return self.operator.pod.pod_primary
 
-        self.assertRaises(RedisReplicationErrorToManyPrimaries, wrap_property)
+        self.assertRaises(ofredis.exceptions.RedisReplicationErrorToManyPrimaries, wrap_property)
 
     def test_property_pod_primary_name(self):
         pod1 = self.create_pod_mock(count=1)
@@ -505,35 +505,35 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         pod1 = self.create_pod_mock(1, phase="Pending")
 
         self.assertRaises(
-            ofredis.RedisReplicationPodNotReady, self.operator.pod.is_ready, pod=pod1
+            ofredis.exceptions.RedisReplicationPodNotReady, self.operator.pod.is_ready, pod=pod1
         )
 
     def test_pod_is_ready_failed(self):
         pod1 = self.create_pod_mock(1, phase="Failed")
 
         self.assertRaises(
-            ofredis.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
+            ofredis.exceptions.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
         )
 
     def test_pod_is_ready_succeeded(self):
         pod1 = self.create_pod_mock(1, phase="Succeeded")
 
         self.assertRaises(
-            ofredis.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
+            ofredis.exceptions.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
         )
 
     def test_pod_is_ready_unknown(self):
         pod1 = self.create_pod_mock(1, phase="Unknown")
 
         self.assertRaises(
-            ofredis.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
+            ofredis.exceptions.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
         )
 
     def test_pod_is_ready_real_unknown_state(self):
         pod1 = self.create_pod_mock(1, phase="WhatTheHeck")
 
         self.assertRaises(
-            ofredis.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
+            ofredis.exceptions.RedisReplicationPodError, self.operator.pod.is_ready, pod=pod1
         )
 
     def test_pod_set_label(self):
@@ -585,7 +585,7 @@ class TestRedisReplicationPodUnit(TestRedisReplicationUnitBase):
         self.operator.pod._pod_index[f"{self.mock_namespace}_{self.mock_name}"] = [pod1]
 
         self.assertRaises(
-            ofredis.RedisReplicationRedisConnError,
+            ofredis.exceptions.RedisReplicationRedisConnError,
             self.operator.pod.set_label,
             pod=pod1,
             label_name="dummy_label",

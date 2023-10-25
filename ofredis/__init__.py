@@ -1,17 +1,9 @@
 import logging
 import kopf
 
+# This is a hack to make sure the indices are loaded before the daemon starts
 import ofredis.indices
-from ofredis.rrbase import RedisReplicationBase
 from ofredis.rrcontroller import RedisReplicationController
-from ofredis.rrpod import RedisReplicationPod
-from ofredis.rrredis import RedisReplicationRedis
-from ofredis.exceptions import RedisReplicationError
-from ofredis.exceptions import RedisReplicationPodError
-from ofredis.exceptions import RedisReplicationPodNotReady
-from ofredis.exceptions import RedisReplicationRedisConnError
-from ofredis.exceptions import RedisReplicationErrorToManyPrimaries
-from ofredis.exceptions import RedisReplicationSecretMissing
 
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
@@ -27,12 +19,14 @@ def redis_monitor_daemon(
     logger,
     spec,
     name,
+    meta,
     namespace,
     pod_index,
     **__,
 ):  # pragma: no cover
     redis_repl = RedisReplicationController(
         logger=logger,
+        meta=meta,
         name=name,
         namespace=namespace,
         spec=spec,

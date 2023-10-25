@@ -126,9 +126,23 @@ class RedisAcl:
 
 
 class RedisReplicationRedis(RedisReplicationBase):
-    def __init__(self, log, name, namespace, pod: RedisReplicationPod, spec, stopped):
+    def __init__(
+        self,
+        log,
+        meta,
+        name,
+        namespace,
+        pod: RedisReplicationPod,
+        spec,
+        stopped,
+    ):
         super().__init__(
-            log=log, name=name, namespace=namespace, spec=spec, stopped=stopped
+            log=log,
+            meta=meta,
+            name=name,
+            namespace=namespace,
+            spec=spec,
+            stopped=stopped,
         )
         self._pod = pod
         self._redis = {}

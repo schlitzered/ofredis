@@ -13,6 +13,7 @@ class RedisReplicationBase:
     def __init__(
         self,
         log: logging.Logger,
+        meta: dict,
         name: str,
         namespace: str,
         spec: dict,
@@ -20,6 +21,7 @@ class RedisReplicationBase:
     ):
         self._api = None
         self._log = log
+        self._meta = meta
         self._name = name
         self._namespace = namespace
         self._spec = spec
@@ -34,6 +36,10 @@ class RedisReplicationBase:
     @property
     def log(self):
         return self._log
+
+    @property
+    def meta(self):
+        return self._meta
 
     @property
     def name(self):

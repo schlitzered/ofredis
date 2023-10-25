@@ -30,6 +30,9 @@ class TestRedisReplicationUnit(TestRedisReplicationUnitBase):
     def test_property_operator_status(self):
         self.assertIs(self.operator.operator_status, self.mock_pykube_rr_obj_instance)
 
+    def test_property_meta(self):
+        self.assertIsInstance(self.operator.meta, dict)
+
     def test_property_spec(self):
         self.assertIsInstance(self.operator.spec, dict)
 

@@ -10,6 +10,7 @@ import yaml
 from tests.unit.base import TestRedisReplicationUnitBase
 
 import ofredis
+import ofredis.exceptions
 
 
 class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
@@ -536,7 +537,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.mock_pykube_secret_objects.filter.return_value = mock_filter_get
 
         self.assertRaises(
-            ofredis.RedisReplicationSecretMissing,
+            ofredis.exceptions.RedisReplicationSecretMissing,
             self.operator.redis.password,
             secret_name="secret_name",
             secret_data_key="Password",
@@ -558,7 +559,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.mock_pykube_secret_objects.filter.return_value = mock_filter_get
 
         self.assertRaises(
-            ofredis.RedisReplicationSecretMissing,
+            ofredis.exceptions.RedisReplicationSecretMissing,
             self.operator.redis.password,
             secret_name="secret_name",
             secret_data_key="Password",
@@ -655,7 +656,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         client_mock.ping.side_effect = pyredis.exceptions.ReplyError()
         self.mock_pyredis.Client.return_value = client_mock
         self.assertRaises(
-            ofredis.RedisReplicationRedisConnError,
+            ofredis.exceptions.RedisReplicationRedisConnError,
             self.operator.redis.client_connect,
             pod=self.pod_secondary,
         )
@@ -794,7 +795,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         )
 
         self.assertRaises(
-            ofredis.RedisReplicationRedisConnError,
+            ofredis.exceptions.RedisReplicationRedisConnError,
             self.operator.redis.config_enforce,
             pod=self.pod_secondary,
         )
@@ -1016,7 +1017,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.connections["pod_secondary"] = redis_client_mock
 
         self.assertRaises(
-            ofredis.RedisReplicationRedisConnError,
+            ofredis.exceptions.RedisReplicationRedisConnError,
             self.operator.redis.acl_enforce,
             pod=self.pod_secondary,
             username="testuser",
@@ -1097,7 +1098,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_acl_list_mock.return_value = {"testuser": redis_acl}
 
         spec_acls_mock = type(self.operator.redis).spec_acls = PropertyMock()
-        spec_acls_mock.side_effect = ofredis.RedisReplicationSecretMissing
+        spec_acls_mock.side_effect = ofredis.exceptions.RedisReplicationSecretMissing
 
         acl_enforce_mock = Mock()
         self.operator.redis.acl_enforce = acl_enforce_mock
@@ -1290,7 +1291,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         redis_client_mock.execute.side_effect = pyredis.exceptions.PyRedisConnClosed
 
         self.assertRaises(
-            ofredis.RedisReplicationRedisConnError,
+            ofredis.exceptions.RedisReplicationRedisConnError,
             self.operator.redis.acl_list,
             self.pod_secondary,
         )
@@ -1380,7 +1381,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis.primary_promote = Mock()
         self.operator.redis.primary_promote.side_effect = (
-            ofredis.RedisReplicationPodNotReady
+            ofredis.exceptions.RedisReplicationPodNotReady
         )
 
         self.operator.redis.primary_enforce()
@@ -1395,7 +1396,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis.primary_promote = Mock()
         self.operator.redis.primary_promote.side_effect = (
-            ofredis.RedisReplicationRedisConnError
+            ofredis.exceptions.RedisReplicationRedisConnError
         )
         self.operator.pod.delete = Mock()
 
@@ -1417,7 +1418,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
 
         self.operator.redis.primary_promote = Mock()
         self.operator.redis.primary_promote.side_effect = (
-            ofredis.RedisReplicationPodError
+            ofredis.exceptions.RedisReplicationPodError
         )
         self.operator.pod.delete = Mock()
 
@@ -1461,7 +1462,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
         self.operator.redis.operator_status_update = Mock()
         self.operator.pod.set_label = Mock()
 
-        with self.assertRaises(ofredis.RedisReplicationRedisConnError):
+        with self.assertRaises(ofredis.exceptions.RedisReplicationRedisConnError):
             self.operator.redis.primary_promote(pod=dummy_pod)
 
         self.operator.redis.operator_status_update.assert_not_called()
@@ -1535,7 +1536,7 @@ class TestRedisAclsEnforce(TestRedisReplicationUnitBase):
             "ReplPassword": str(uuid.uuid4()),
         }
 
-        with self.assertRaises(ofredis.RedisReplicationRedisConnError):
+        with self.assertRaises(ofredis.exceptions.RedisReplicationRedisConnError):
             self.operator.redis.secondary_enforce(pod=dummy_pod1)
 
     def test_secondary_enforce(self):

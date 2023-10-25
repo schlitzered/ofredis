@@ -5,6 +5,7 @@ import pykube
 from tests.unit.base import TestRedisReplicationUnitBase
 
 import ofredis
+import ofredis.indices
 
 
 class TestIndiciesUnit(TestRedisReplicationUnitBase):

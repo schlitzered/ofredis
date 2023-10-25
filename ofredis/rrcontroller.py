@@ -14,15 +14,22 @@ class RedisReplicationController(RedisReplicationBase):
         stopped,
         spec: dict,
         logger: logging.Logger,
+        meta: dict,
         name: str,
         namespace: str,
         pod_index: dict,
     ):
         super().__init__(
-            log=logger, name=name, namespace=namespace, spec=spec, stopped=stopped
+            log=logger,
+            meta=meta,
+            name=name,
+            namespace=namespace,
+            spec=spec,
+            stopped=stopped,
         )
         self._pod = RedisReplicationPod(
             log=self.log,
+            meta=meta,
             name=name,
             namespace=namespace,
             spec=spec,
@@ -31,6 +38,7 @@ class RedisReplicationController(RedisReplicationBase):
         )
         self._redis = RedisReplicationRedis(
             log=self.log,
+            meta=meta,
             name=name,
             namespace=namespace,
             pod=self.pod,

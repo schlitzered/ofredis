@@ -16,6 +16,7 @@ class RedisReplicationPod(RedisReplicationBase):
     def __init__(
         self,
         log: logging.Logger,
+        meta: dict,
         name: str,
         namespace: str,
         spec: dict,
@@ -27,6 +28,7 @@ class RedisReplicationPod(RedisReplicationBase):
         self._pod_template_hash = None
         super().__init__(
             log=log,
+            meta=meta,
             name=name,
             namespace=namespace,
             spec=spec,
@@ -55,10 +57,10 @@ class RedisReplicationPod(RedisReplicationBase):
                     ],
                 },
             }
-            if 'resources' in self.spec["redis"]:
-                self._pod_template["spec"]["containers"][0][
-                    "resources"
-                ] = self.spec["redis"]["resources"]
+            if "resources" in self.spec["redis"]:
+                self._pod_template["spec"]["containers"][0]["resources"] = self.spec[
+                    "redis"
+                ]["resources"]
             if "securityContext" in self.spec["redis"]:
                 self._pod_template["spec"]["containers"][0][
                     "securityContext"
