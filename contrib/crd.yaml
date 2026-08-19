@@ -67,7 +67,7 @@ spec:
                 description: 'custom redis settings, some settings will be filtered, since they are manged by the operator, check source for redis_config_params_filter'
                 type: object
               imagePullSecrets:
-                description: 'Pod ImagePullSecrets More info: 
+                description: "Pod ImagePullSecrets More info:"
                 items:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true

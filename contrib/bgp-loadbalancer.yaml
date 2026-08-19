@@ -1,0 +1,51 @@
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: redis-pool
+spec:
+  blocks:
+    - cidr: 192.168.20.0/24
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: redis-service-advertisement
+  labels:
+    advertise: service
+spec:
+  advertisements:
+    - advertisementType: "Service"
+      service:
+        addresses:
+          - LoadBalancerIP
+      selector:
+        matchExpressions:
+          - key: RedisReplication
+            operator: Exists
+
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: gateway-peer-config
+spec:
+  ebgpMultihop: 1
+  families:
+  - advertisements:
+      matchLabels:
+        advertise: pod-cidr
+    afi: ipv4
+    safi: unicast
+  - advertisements:
+      matchLabels:
+        advertise: service
+    afi: ipv4
+    safi: unicast
+  gracefulRestart:
+    enabled: true
+    restartTimeSeconds: 120
+  timers:
+    connectRetryTimeSeconds: 120
+    holdTimeSeconds: 90
+    keepAliveTimeSeconds: 30

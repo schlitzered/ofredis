@@ -36,3 +36,36 @@ spec:
   replicas: 3
   redis:
     image: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rrd-85-primary
+  labels:
+    RedisReplication: rrd-85
+    RedisReplicationRole: Primary
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 6379
+      protocol: TCP
+  selector:
+    RedisReplication: rrd-85
+    RedisReplicationRole: Primary
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rrd-85-secondary
+  labels:
+    RedisReplication: rrd-85
+    RedisReplicationRole: Secondary
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 6379
+      protocol: TCP
+  selector:
+    RedisReplication: rrd-85
+    RedisReplicationRole: Secondary

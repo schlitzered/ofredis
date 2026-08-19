@@ -36,3 +36,63 @@ spec:
   replicas: 3
   redis:
     image: redis
+  sideCarContainers:
+    - name: redis-exporter
+      image: oliver006/redis_exporter:v1.58.0
+      ports:
+        - name: metrics
+          containerPort: 9121
+          protocol: TCP
+      env:
+        - name: REDIS_USER
+          value: admin
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-replication-example
+              key: admin_password
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rrd-1-primary
+  labels:
+    RedisReplication: rrd-1
+    RedisReplicationRole: Primary
+spec:
+  type: LoadBalancer
+  ports:
+    - name: redis
+      port: 6379
+      protocol: TCP
+      targetPort: 6379
+    - name: metrics
+      port: 9121
+      protocol: TCP
+      targetPort: 9121
+  selector:
+    RedisReplication: rrd-1
+    RedisReplicationRole: Primary
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rrd-1-secondary
+  labels:
+    RedisReplication: rrd-1
+    RedisReplicationRole: Secondary
+spec:
+  type: LoadBalancer
+  ports:
+    - name: redis
+      port: 6379
+      protocol: TCP
+      targetPort: 6379
+    - name: metrics
+      port: 9121
+      protocol: TCP
+      targetPort: 9121
+  selector:
+    RedisReplication: rrd-1
+    RedisReplicationRole: Secondary
